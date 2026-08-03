@@ -45,3 +45,8 @@ next-env.d.ts
 /prisma/dev.db
 
 /lib/prisma-generated
+
+/.agents
+/.claude
+/.next
+/.windsurf
