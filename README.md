@@ -38,3 +38,7 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 数据库：
 terminal：  npx prisma studio
+
+## Development Notes
+
+- [Reflection MVP — 2026-08-08](docs/dev-notes-2026-08-08.md)
