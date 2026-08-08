@@ -5,7 +5,7 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../lib/prisma-generated" 
+  output   = "../lib/prisma-generated"
 }
 
 datasource db {
@@ -14,7 +14,38 @@ datasource db {
 }
 
 model Note {
-     id        String   @id @default(cuid())
-     content   String   // 我们输入的内容
-     createdAt DateTime @default(now()) // 创建时间
-   }
+  id        String   @id @default(cuid())
+  content   String // 我们输入的内容
+  createdAt DateTime @default(now()) // 创建时间
+}
+
+// Reflection 会先独立保存，因此即使 LLM 调用失败，用户写的内容也不会丢失。
+model Reflection {
+  id        String      @id @default(cuid())
+  content   String
+  createdAt DateTime    @default(now())
+  analysis  AIAnalysis?
+}
+
+// reflectionId 表示一条 Reflection 当前对应一份分析。
+// model 记录使用了哪个 LLM，方便以后切换模型或重新分析
+// onDelete: Cascade 表示删除 Reflection 时，一并删除对应分析。
+// reflection 字段保持在同一行 
+model AIAnalysis {
+  id           String   @id @default(cuid())
+  reflectionId String   @unique
+  result       String
+  model        String?
+  createdAt    DateTime @default(now())
+
+  reflection Reflection @relation(fields: [reflectionId], references: [id], onDelete: Cascade)
+}
+
+model RecentPatternAnalysis {
+  id              String   @id @default(cuid())
+  reflectionIds   String
+  reflectionCount Int
+  result          String
+  model           String?
+  createdAt       DateTime @default(now())
+}
