@@ -39,6 +39,13 @@ export default function HistoryPage() {
     const [recentPatternsError, setRecentPatternsError] =
         useState('');
 
+    const [analyzingReflectionId, setAnalyzingReflectionId] =
+        useState<string | null>(null);
+
+    const [analysisErrors, setAnalysisErrors] = useState<
+        Record<string, string>
+    >({});
+
     useEffect(() => {
         const controller = new AbortController();
 
@@ -76,6 +83,58 @@ export default function HistoryPage() {
             controller.abort();
         };
     }, []);
+
+    async function handleAnalyzeReflection(reflectionId: string) {
+        setAnalyzingReflectionId(reflectionId);
+
+        setAnalysisErrors((current) => ({
+            ...current,
+            [reflectionId]: '',
+        }));
+
+        try {
+            const response = await fetch(
+                `/api/reflections/${reflectionId}/analyze`,
+                {
+                    method: 'POST',
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.error || '分析 Reflection 失败'
+                );
+            }
+
+            setReflections((current) =>
+                current.map((reflection) =>
+                    reflection.id === reflectionId
+                        ? {
+                            ...reflection,
+                            analysis: {
+                                id: data.analysis.id,
+                                model: data.analysis.model,
+                                createdAt: data.analysis.createdAt,
+                                result: data.analysis.result,
+                            },
+                        }
+                        : reflection
+                )
+            );
+        } catch (error) {
+            setAnalysisErrors((current) => ({
+                ...current,
+                [reflectionId]:
+                    error instanceof Error
+                        ? error.message
+                        : '分析 Reflection 失败',
+            }));
+        } finally {
+            setAnalyzingReflectionId(null);
+        }
+    }
 
     async function handleAnalyzeRecent() {
         setIsAnalyzingRecent(true);
@@ -289,6 +348,48 @@ export default function HistoryPage() {
                         >
                             {reflection.content}
                         </p>
+
+
+                        <button
+                            type="button"
+                            onClick={() =>
+                                handleAnalyzeReflection(reflection.id)
+                            }
+                            disabled={analyzingReflectionId !== null}
+                            style={{
+                                marginTop: '8px',
+                                padding: '10px 16px',
+                                border: 'none',
+                                borderRadius: '8px',
+                                backgroundColor:
+                                    analyzingReflectionId !== null
+                                        ? '#9ca3af'
+                                        : '#7c3aed',
+                                color: 'white',
+                                cursor:
+                                    analyzingReflectionId !== null
+                                        ? 'not-allowed'
+                                        : 'pointer',
+                            }}
+                        >
+                            {analyzingReflectionId === reflection.id
+                                ? 'Analyzing...'
+                                : reflection.analysis
+                                    ? 'Re-analyze with AI'
+                                    : 'Analyze with AI'}
+                        </button>
+
+                        {analysisErrors[reflection.id] && (
+                            <p
+                                style={{
+                                    marginTop: '12px',
+                                    color: '#991b1b',
+                                }}
+                            >
+                                {analysisErrors[reflection.id]}
+                            </p>
+                        )}
+
 
                         {!reflection.analysis && (
                             <p
