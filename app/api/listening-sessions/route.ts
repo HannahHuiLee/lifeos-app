@@ -1,0 +1,133 @@
+import { NextResponse } from 'next/server';
+
+import { getListeningPractice } from '@/lib/listening-practices';
+import { prisma } from '@/lib/prisma';
+// History 的数据层
+import {
+    ListeningAnalysisSchema,
+    type ListeningAnalysis,
+} from '@/lib/listening-analysis';
+
+
+// JSON.parse → Zod 校验 → 有效分析或 null
+function parseAnalysis(
+    value: string | null
+): ListeningAnalysis | null {
+    if (!value) {
+        return null;
+    }
+
+    try {
+        const json = JSON.parse(value);
+        const parsed = ListeningAnalysisSchema.safeParse(json);
+
+        if (!parsed.success) {
+            console.error(
+                'Invalid stored listening analysis:',
+                parsed.error.flatten()
+            );
+            return null;
+        }
+
+        return parsed.data;
+    } catch (error) {
+        console.error(
+            'Failed to parse stored listening analysis:',
+            error
+        );
+        return null;
+    }
+}
+
+
+export async function GET() {
+    try {
+        const sessions = await prisma.listeningSession.findMany({
+            orderBy: {
+                createdAt: 'desc',
+            },
+            take: 50,
+        });
+
+        const history = sessions.map((session) => {
+            const practice = getListeningPractice(session.practiceId);
+
+            return {
+                id: session.id,
+                practiceId: session.practiceId,
+                practice: practice
+                    ? {
+                        title: practice.title,
+                        level: practice.level,
+                    }
+                    : null,
+                answer: session.answer,
+                analysis: parseAnalysis(session.analysis),
+                model: session.model,
+                createdAt: session.createdAt,
+            };
+        });
+
+        return NextResponse.json({ sessions: history });
+    } catch (error) {
+        console.error(
+            'Failed to get listening session history:',
+            error
+        );
+
+        return NextResponse.json(
+            { error: '读取 Listening History 失败' },
+            { status: 500 }
+        );
+    }
+}
+
+
+export async function POST(request: Request) {
+    try {
+        const body = await request.json();
+        const { practiceId, answer } = body;
+
+        if (typeof practiceId !== 'string') {
+            return NextResponse.json(
+                { error: 'practiceId 必须是字符串' },
+                { status: 400 }
+            );
+        }
+
+        const practice = getListeningPractice(practiceId);
+
+        if (!practice) {
+            return NextResponse.json(
+                { error: '听力素材不存在' },
+                { status: 404 }
+            );
+        }
+
+        if (typeof answer !== 'string' || answer.trim() === '') {
+            return NextResponse.json(
+                { error: '请先输入你的英文总结' },
+                { status: 400 }
+            );
+        }
+
+        const session = await prisma.listeningSession.create({
+            data: {
+                practiceId,
+                answer: answer.trim(),
+            },
+        });
+
+        return NextResponse.json(
+            { session },
+            { status: 201 }
+        );
+    } catch (error) {
+        console.error('Failed to create listening session:', error);
+
+        return NextResponse.json(
+            { error: '保存 Listening Session 失败' },
+            { status: 500 }
+        );
+    }
+}
