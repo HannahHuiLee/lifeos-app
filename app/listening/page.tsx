@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { listeningPractices } from '@/lib/listening-practices';
 import type { ListeningAnalysis } from '@/lib/listening-analysis';
@@ -11,9 +11,9 @@ import type { ListeningAnalysis } from '@/lib/listening-analysis';
 export default function ListeningPage() {
     const practice = listeningPractices[0];
 
-    const [isPlaying, setIsPlaying] = useState(false);
+    // const [isPlaying, setIsPlaying] = useState(false);
     const [showTranscript, setShowTranscript] = useState(false);
-    const [message, setMessage] = useState('');
+    // const [message, setMessage] = useState('');
 
     // Write Answer → Save → Mock AI Analyze
     const [answer, setAnswer] = useState('');
@@ -21,56 +21,6 @@ export default function ListeningPage() {
         useState<ListeningAnalysis | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitMessage, setSubmitMessage] = useState('');
-
-    useEffect(() => {
-        return () => {
-            window.speechSynthesis.cancel();
-        };
-    }, []);
-
-    function handlePlay() {
-        if (!('speechSynthesis' in window)) {
-            setMessage('当前浏览器不支持语音播放。');
-            return;
-        }
-
-        window.speechSynthesis.cancel();
-
-        const voices = window.speechSynthesis.getVoices();
-
-        setIsPlaying(true);
-        setMessage('');
-
-        practice.turns.forEach((turn, index) => {
-            const utterance = new SpeechSynthesisUtterance(turn.text);
-
-            utterance.rate = 0.9;
-            utterance.pitch = turn.speaker === 'Maya' ? 1.1 : 0.9;
-
-            if (voices.length > 0) {
-                const voiceIndex = turn.speaker === 'Maya' ? 0 : 1;
-                utterance.voice = voices[voiceIndex % voices.length];
-            }
-
-            if (index === practice.turns.length - 1) {
-                utterance.onend = () => {
-                    setIsPlaying(false);
-                };
-            }
-
-            utterance.onerror = () => {
-                setIsPlaying(false);
-                setMessage('播放失败，请再试一次。');
-            };
-
-            window.speechSynthesis.speak(utterance);
-        });
-    }
-
-    function handleStop() {
-        window.speechSynthesis.cancel();
-        setIsPlaying(false);
-    }
 
     function handleAnswerChange(
         event: React.ChangeEvent<HTMLTextAreaElement>
@@ -167,43 +117,38 @@ export default function ListeningPage() {
 
                 <h2 style={{ marginTop: '8px' }}>{practice.title}</h2>
 
-                <div
+                <audio
+                    controls
+                    preload="metadata"
                     style={{
-                        display: 'flex',
-                        gap: '12px',
-                        flexWrap: 'wrap',
+                        width: '100%',
                         marginTop: '20px',
                     }}
                 >
-                    <button
-                        type="button"
-                        onClick={handlePlay}
-                        disabled={isPlaying}
-                    >
-                        {isPlaying ? 'Playing...' : '▶ Play conversation'}
-                    </button>
+                    <source src={practice.audioSrc} type="audio/mpeg" />
 
-                    <button
-                        type="button"
-                        onClick={handleStop}
-                        disabled={!isPlaying}
-                    >
-                        Stop
-                    </button>
+                    Your browser does not support audio playback.
+                </audio>
 
-                    <button
-                        type="button"
-                        onClick={() => setShowTranscript((value) => !value)}
-                    >
-                        {showTranscript ? 'Hide transcript' : 'Show transcript'}
-                    </button>
-                </div>
+                <p
+                    style={{
+                        margin: '8px 0 0',
+                        color: '#6b7280',
+                        fontSize: '13px',
+                    }}
+                >
+                    This lesson uses an AI-generated voice.
+                </p>
 
-                {message && (
-                    <p style={{ marginTop: '16px', color: '#b91c1c' }}>
-                        {message}
-                    </p>
-                )}
+                <button
+                    type="button"
+                    onClick={() => setShowTranscript((value) => !value)}
+                    style={{
+                        marginTop: '18px',
+                    }}
+                >
+                    {showTranscript ? 'Hide transcript' : 'Show transcript'}
+                </button>
 
                 {showTranscript && (
                     <div

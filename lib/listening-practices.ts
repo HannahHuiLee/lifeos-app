@@ -7,6 +7,7 @@ export type ListeningPractice = {
   id: string;
   title: string;
   level: string;
+  audioSrc: string;
   turns: ListeningTurn[];
   reference: {
     mainIdea: string;
@@ -24,6 +25,7 @@ export const listeningPractices: ListeningPractice[] = [
     id: 'team-picnic-ride',
     title: 'A Ride to the Team Picnic',
     level: 'A2–B1',
+    audioSrc: '/audio/team-picnic-ride.mp3',
     turns: [
       {
         speaker: 'Maya',
