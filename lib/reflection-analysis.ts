@@ -42,3 +42,47 @@ export const RecentPatternsSchema = z.object({
 export type RecentPatterns = z.infer<
   typeof RecentPatternsSchema
 >;
+
+//
+
+export const HistoricalEvidenceSchema = z.object({
+  reflectionId: z.string(),
+  excerpt: z.string(),
+});
+
+export type HistoricalEvidence = z.infer<
+  typeof HistoricalEvidenceSchema
+>;
+
+// pattern : 观察到了什么重复现象 ; interpretation : 这个现象可能意味着什么。 ; evidence : 这个判断依据了哪些历史记录。
+export const EvidenceBackedInsightSchema = z.object({
+  pattern: z.string(),
+  interpretation: z.string(),
+  evidence: z
+    .array(HistoricalEvidenceSchema)
+    .min(1)
+    .max(3),
+
+  confidence: z.enum(['low', 'medium', 'high']),
+});
+
+export type EvidenceBackedInsight = z.infer<
+  typeof EvidenceBackedInsightSchema
+>;
+
+export const EvidenceBackedReflectionAnalysisSchema = z.object({
+  status: z.enum([
+    'insights_found',
+    'insufficient_evidence',
+  ]),
+
+  insights: z
+    .array(EvidenceBackedInsightSchema)
+    .max(3),
+
+  insufficientEvidenceReason: z.string().nullable(),
+});
+
+export type EvidenceBackedReflectionAnalysis = z.infer<
+  typeof EvidenceBackedReflectionAnalysisSchema
+>;
