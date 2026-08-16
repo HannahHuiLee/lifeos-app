@@ -408,7 +408,19 @@ Insight 3：
 
 5. **Interpretation 引入未被证明的原因和心理判断**
 
-   “任务复杂度影响效率”和“用户
+   “任务复杂度影响效率”和“用户能够接受进度差异”都没有直接 Evidence 支持。
+
+6. **来源验证继续有效**
+
+   Validator 成功移除了 2 条不合法 Evidence，但无法识别重复事件、主题偏离和语义支持不足。
+
+### Case 5 结论
+
+Case 5 没有通过 Grounding 测试。
+
+模型识别到了 LifeOS 和 Evidence-backed Reflection UI 等相关主题，但没有准确生成“项目从 UI 开发推进到 Evidence Validation 修复”的连续性 Insight。
+
+重复保存的相同 Reflection 再次被当作多个独立事件，导致模型错误生成“反复完成同一任务”的高置信度结论。最终 Evidence 均通过来源验证，但来源真实仍不能保证结论获得充分支持。
 
 ## 测试结果
 
@@ -518,11 +530,12 @@ Validator 能确认 Evidence 来自检索上下文，但不能确认：
 
 只有至少两个内容不同、代表独立事件并且语义相关的历史 Reflection，才允许生成长期模式。
 
-证据不足时返回：insufficient_evidence
-
+证据不足时返回：`insufficient_evidence`。
 
 #### Priority 4：限制 Interpretation 的推断范围
+
 Prompt 明确禁止推断 Evidence 中没有表达的：
+
 - 人格；
 - 心理诊断；
 - 长期身份；
@@ -530,37 +543,325 @@ Prompt 明确禁止推断 Evidence 中没有表达的：
 - 用户意图；
 - 未知因果关系。
 
-
 #### Priority 5：让 Confidence 由证据质量决定
-1. Confidence 应考虑：
+
+Confidence 应考虑：
+
 - 独立 Evidence 数量；
 - Evidence 是否重复；
 - 是否存在反例；
 - Evidence 与当前 Reflection 的相关程度；
 - Pattern 是否包含推断。
 
-2. Definition of Done 检查
+### Definition of Done 检查
 
-- [ ] 可以输入并保存真实 Reflection
-
-- [ ] 可以检索历史 Reflection
-
-- [ ] LLM 返回结构化 Insight
-
-- [ ] Insight 可以显示真实 Evidence
-
-- [ ] 非法 Evidence 不能静默进入 UI
-
-- [ ] 可以手动执行至少 5 个 Eval Case
-
+- [x] 可以输入并保存真实 Reflection
+- [x] 可以检索历史 Reflection
+- [x] LLM 返回结构化 Insight
+- [x] Insight 可以显示真实 Evidence
+- [x] 非法 Evidence 不能静默进入 UI
+- [x] 可以手动执行至少 5 个 Eval Case
 - [ ] 模型能稳定围绕当前 Reflection 生成 Grounded Insight
-
 - [ ] 重复内容不会虚增模式强度
-
 - [ ] 证据不足时能稳定返回 insufficient_evidence
 
 ### 最终判断
-今天的 MVP 工程目标已经完成，Evidence-backed Reflection 的端到端流程可以运行，应用层 Evidence Validation 也已证明有效。  
-Eval V0 同时表明，下一版不应优先增加向量数据库或更复杂的 Retrieval。  
-当前最重要的问题是 Grounding 约束、重复数据处理和 Evidence 的语义相关性。  
+
+今天的 MVP 工程目标已经完成，Evidence-backed Reflection 的端到端流程可以运行，应用层 Evidence Validation 也已证明有效。
+
+Eval V0 同时表明，下一版不应优先增加向量数据库或更复杂的 Retrieval。
+
+当前最重要的问题是 Grounding 约束、重复数据处理和 Evidence 的语义相关性。
+
 因此，下一步应先改进结构化输出和验证边界，再考虑 embeddings、vector search 或 hybrid retrieval。
+
+---
+
+## Grounding Contract Regression — V1
+
+### 测试信息
+
+- 测试日期：2026-08-16
+- 模型：gpt-4.1-mini
+- Retrieval 策略：保持 V0 不变，仍使用当前 Reflection 之前最近最多 5 条
+- 测试方式：重新分析原始 Case ID，不创建新的测试 Reflection
+- 修改范围：
+  - 每个 Insight 增加 `currentEvidence`
+  - 每个 Insight 增加 `relationship`
+  - Prompt 改为先判断是否存在 Grounding 配对
+  - Validator 验证 Current Evidence ID 和 excerpt
+  - UI 分开显示 Current Reflection 和 Historical Evidence
+
+### 回归目的
+
+验证强制的“当前 Reflection ↔ 历史 Evidence Grounding 合同”是否能够：
+
+1. 防止模型忽略当前 Reflection；
+2. 在没有相关历史 Evidence 时返回 `insufficient_evidence`；
+3. 区分 `supports` 和 `contradicts`；
+4. 减少与当前内容无关的额外 Insight；
+5. 阻止伪造的 Current Evidence 进入 API 和 UI。
+
+### 回归结果
+
+| Case | Status | Relationship | Grounded | Evidence Valid | Useful 1–5 | Over-inference | Removed Evidence | Notes |
+|---|---|---|---|---|---:|---|---:|---|
+| 1 | insights_found | supports | FAIL | PASS | 2 | MINOR | 0 | 无关的“平衡活动”Insight 已消失，输出从 3 条降到 1 条；但内容相同、ID 不同的记录仍被解释成重复发生的现实事件。 |
+| 2 | insufficient_evidence | N/A | PASS | PASS | 4 | NONE | 0 | 正确识别历史记录中没有陶艺、拉坯或相似手工活动，不再将陶艺与 drumming 或 LifeOS 强行关联。 |
+| 3 | insufficient_evidence | N/A | PASS | PASS | 4 | NONE | 0 | 正确识别历史记录中没有会议、紧张或类似情绪变化，不再忽略当前 Reflection，也没有心理状态扩大。 |
+| 4 | insights_found | contradicts | PASS | PASS | 4 | NONE | 只保留 1 条 Insight，正确对比当前星巴克负面经历与历史正面经历；不再推断用户正在优化工作环境。 |
+| 5 | insights_found | supports | PASS | PASS | 4 | NONE | 只保留 1 条 Insight，正确识别 LifeOS、Evidence-backed Reflection、Validation 和 UI 的持续开发；不再被星巴克主题带偏。 |
+
+### 结果汇总
+
+- 已完成：5/5
+- 全项通过：4/5
+- Grounded 通过：4/5
+- Evidence Valid 通过：5/5
+- Useful 达标：4/5
+- Over-inference 达标：4/5
+- 所有 Case 的 Removed Evidence：0
+
+### V0 与 V1 对比
+
+| 指标 | Eval V0 | Grounding Contract V1 |
+|---|---:|---:|
+| Grounded 通过 | 1/5 | 4/5 |
+| Evidence Valid 通过 | 5/5 | 5/5 |
+| Useful 达标 | 2/5 | 4/5 |
+| Over-inference 达标 | 0/5 | 4/5 |
+| 全项通过 | 0/5 | 4/5 |
+
+### 按 Case 对比
+
+#### Case 1
+
+V0：
+
+- 返回 3 条 Insight；
+- 前两条与当前内容相关；
+- 第三条将重复保存的 archery/meetup 记录扩大为长期时间管理模式。
+
+V1：
+
+- 只返回 1 条 Insight；
+- 无关的时间管理 Pattern 已消失；
+- Current Evidence 和 Historical Evidence 主题一致；
+- 但两条内容完全相同的数据库记录仍被视为两个现实事件。
+
+结论：
+
+Grounding 合同解决了额外无关 Insight，但没有解决 Evidence Independence 和内容去重。
+
+#### Case 2
+
+V0：
+
+- 错误返回 `insights_found`；
+- 将陶艺、drumming 和 LifeOS 扩大为生活平衡策略；
+- Useful 为 2/5。
+
+V1：
+
+- 正确返回 `insufficient_evidence`；
+- 明确说明没有陶艺、拉坯或类似手工活动历史；
+- 不再强行提高抽象层级制造 Pattern。
+
+结论：
+
+Grounding 合同修复了“没有相关证据仍强行生成模式”的问题。
+
+#### Case 3
+
+V0：
+
+- 完全忽略当前会议 Reflection；
+- 转而总结陶艺、成长和 LifeOS；
+- Useful 为 1/5。
+
+V1：
+
+- 正确返回 `insufficient_evidence`；
+- 明确说明没有会议、紧张或类似情绪变化的历史 Evidence；
+- 没有进行长期焦虑或人格推断。
+
+结论：
+
+Grounding 合同修复了 Current Reflection Anchoring Failure。
+
+#### Case 4
+
+V0：
+
+- 核心矛盾 Pattern 正确；
+- 但生成了第二条关于主动优化环境的意图推断；
+- Validator 移除 2 条 Evidence。
+
+V1：
+
+- 只生成 1 条高质量 Insight；
+- 明确返回 `contradicts`；
+- Current Evidence 是被聊天声干扰的负面经历；
+- Historical Evidence 是过去在星巴克专注工作的正面经历；
+- 没有额外意图推断；
+- Removed Evidence 为 0。
+
+结论：
+
+Grounding 合同保留了原本正确的反例处理，同时减少了额外推断。
+
+#### Case 5
+
+V0：
+
+- 返回 3 条 Insight；
+- 被最近的星巴克主题带偏；
+- 重复 UI 记录被解释为反复完成任务；
+- 加入任务复杂度和接受进度差异等推断。
+
+V1：
+
+- 只返回 1 条 Insight；
+- 明确返回 `supports`；
+- 正确连接当前 Validation/UI 修复与历史 UI 开发；
+- 没有讨论无关的星巴克环境；
+- 没有人格、事业或未知因果推断。
+
+结论：
+
+Grounding 合同修复了主题偏离，并让模型围绕当前开发阶段生成 Insight。
+
+### Current Evidence 负向验证
+
+为了验证应用层不会信任模型返回的 Current Evidence，Mock 临时返回：
+
+```text
+reflectionId = invalid-current-id
+```
+
+Validator 结果：
+
+```text
+status = insufficient_evidence
+insights = []
+removedEvidenceCount = 1
+```
+
+恢复正确 ID 后：
+
+```text
+status = insights_found
+removedEvidenceCount = 0
+```
+
+结论：伪造的 Current Reflection ID 不能静默进入 API 或 UI。
+
+### Supports / Contradicts 验证
+
+#### Supports
+
+当前与历史都描述 Evidence-backed Reflection、Validation 和 UI 的持续开发。
+
+结果：
+
+```text
+relationship = supports
+Grounded = PASS
+Evidence Valid = PASS
+```
+
+#### Contradicts
+
+当前描述 Grounding 测试未通过，历史描述完成了计划测试。
+
+结果：
+
+```text
+relationship = contradicts
+Grounded = PASS
+Evidence Valid = PASS
+```
+
+### UI 验证
+
+UI 现在能够显示：
+
+- 当前记录支持历史模式；
+- 当前记录反驳历史模式；
+- Current Reflection excerpt；
+- Historical Evidence excerpts；
+- Current Reflection ID；
+- Historical Reflection ID 和日期；
+- Current 与 Historical Evidence 的独立数量。
+
+Current Evidence 使用蓝色，Historical Evidence 使用绿色，使用户能够直接审计 Grounding 关系。
+
+### Grounding Contract V1 结论
+
+Grounding Contract 是一次高杠杆改进。
+
+它同时改善了 Case 2、Case 3、Case 4 和 Case 5，并减少了 Case 1 中无关的额外 Pattern。
+
+最明显的改善包括：
+
+1. 模型不再只总结历史记录；
+2. 没有相关 Evidence 时能够返回 `insufficient_evidence`；
+3. Current Evidence 成为每个 Insight 的强制组成部分；
+4. 模型能够明确区分 `supports` 和 `contradicts`；
+5. Current Evidence ID 和 excerpt 经过应用验证；
+6. UI 可以直接展示并审计 Grounding 关系；
+7. Insight 数量更少，但相关性和实用性更高。
+
+### 剩余失败模式
+
+唯一仍未通过的原始 Case 是 Case 1。
+
+剩余根因不是 Current Reflection Anchoring，而是：
+
+```text
+内容相同但 ID 不同的数据库记录
+被错误地视为多个独立现实事件
+```
+
+这属于 Evidence Independence / Duplicate Evidence 问题。
+
+当前系统仍然只能确认：
+
+- Evidence ID 真实；
+- excerpt 来自原文；
+- Current 与 Historical Evidence 主题相关。
+
+它仍然不能确认：
+
+- 多条 Evidence 是否代表不同现实事件；
+- 重复内容是否应该增加 Pattern 强度；
+- Confidence 是否被重复数据虚增。
+
+### 更新后的 Definition of Done
+
+- [x] 可以输入并保存真实 Reflection
+- [x] 可以检索历史 Reflection
+- [x] LLM 返回结构化 Insight
+- [x] Insight 可以显示真实历史 Evidence
+- [x] Current Evidence 是结构化输出的一部分
+- [x] Current Evidence ID 和 excerpt 经过应用验证
+- [x] 非法 Current 或 Historical Evidence 不能静默进入 UI
+- [x] UI 显示 Current 与 Historical Evidence
+- [x] UI 显示 `supports` / `contradicts`
+- [x] 没有相关 Evidence 时能返回 `insufficient_evidence`
+- [x] 已执行 5 个 V0 Case
+- [x] 已重新执行 5 个 Grounding Contract Regression Case
+- [ ] 重复内容不会虚增模式强度
+- [ ] Confidence 能反映独立 Evidence 数量
+
+### 下一优先级
+
+下一项最值得解决的问题是：
+
+```text
+在 Retrieval 边界对完全相同的 Reflection 内容进行去重
+```
+
+暂时不需要增加 embeddings 或向量数据库。
+
+首先处理完全相同的内容，就能直接解决当前唯一剩余失败的 Case 1，并防止重复保存的数据虚增 Pattern 和 Confidence。
