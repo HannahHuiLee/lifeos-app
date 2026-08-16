@@ -541,25 +541,26 @@ Prompt 明确禁止推断 Evidence 中没有表达的：
 
 2. Definition of Done 检查
 
-[]可以输入并保存真实 Reflection
+- [ ] 可以输入并保存真实 Reflection
 
-[]可以检索历史 Reflection
+- [ ] 可以检索历史 Reflection
 
-[]LLM 返回结构化 Insight
+- [ ] LLM 返回结构化 Insight
 
-[]Insight 可以显示真实 Evidence
+- [ ] Insight 可以显示真实 Evidence
 
-[]非法 Evidence 不能静默进入 UI
+- [ ] 非法 Evidence 不能静默进入 UI
 
-[]可以手动执行至少 5 个 Eval Case
+- [ ] 可以手动执行至少 5 个 Eval Case
 
-[]模型能稳定围绕当前 Reflection 生成 Grounded Insight
+- [ ] 模型能稳定围绕当前 Reflection 生成 Grounded Insight
 
-[]重复内容不会虚增模式强度
+- [ ] 重复内容不会虚增模式强度
 
-[]证据不足时能稳定返回 insufficient_evidence
+- [ ] 证据不足时能稳定返回 insufficient_evidence
 
 ### 最终判断
-今天的 MVP 工程目标已经完成，Evidence-backed Reflection 的端到端流程可以运行，应用层 Evidence Validation 也已证明有效。
-Eval V0 同时表明，下一版不应优先增加向量数据库或更复杂的 Retrieval。当前最重要的问题是 Grounding 约束、重复数据处理和 Evidence 的语义相关性。
+今天的 MVP 工程目标已经完成，Evidence-backed Reflection 的端到端流程可以运行，应用层 Evidence Validation 也已证明有效。  
+Eval V0 同时表明，下一版不应优先增加向量数据库或更复杂的 Retrieval。  
+当前最重要的问题是 Grounding 约束、重复数据处理和 Evidence 的语义相关性。  
 因此，下一步应先改进结构化输出和验证边界，再考虑 embeddings、vector search 或 hybrid retrieval。

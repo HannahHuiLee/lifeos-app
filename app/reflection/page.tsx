@@ -462,25 +462,25 @@ function EvidenceBackedResult({
 
       {response.validation.removedEvidenceCount >
         0 && (
-        <p
-          style={{
-            padding: '12px',
-            color: '#92400e',
-            backgroundColor: '#fef3c7',
-            borderRadius: '8px',
-          }}
-        >
-          系统已移除{' '}
-          {
-            response.validation
-              .removedEvidenceCount
-          }{' '}
-          条未通过验证的证据。
-        </p>
-      )}
+          <p
+            style={{
+              padding: '12px',
+              color: '#92400e',
+              backgroundColor: '#fef3c7',
+              borderRadius: '8px',
+            }}
+          >
+            系统已移除{' '}
+            {
+              response.validation
+                .removedEvidenceCount
+            }{' '}
+            条未通过验证的证据。
+          </p>
+        )}
 
       {result.status ===
-      'insufficient_evidence' ? (
+        'insufficient_evidence' ? (
         <div
           style={{
             marginTop: '20px',
@@ -546,6 +546,30 @@ function EvidenceBackedResult({
                   {insight.interpretation}
                 </p>
 
+                <p
+                  style={{
+                    display: 'inline-block',
+                    marginTop: '4px',
+                    marginBottom: 0,
+                    padding: '6px 10px',
+                    color:
+                      insight.relationship === 'supports'
+                        ? '#166534'
+                        : '#92400e',
+                    backgroundColor:
+                      insight.relationship === 'supports'
+                        ? '#dcfce7'
+                        : '#fef3c7',
+                    borderRadius: '999px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                  }}
+                >
+                  {insight.relationship === 'supports'
+                    ? '当前记录支持历史模式'
+                    : '当前记录反驳历史模式'}
+                </p>
+
                 <details
                   style={{
                     marginTop: '16px',
@@ -560,7 +584,7 @@ function EvidenceBackedResult({
                       fontWeight: 600,
                     }}
                   >
-                    查看证据（
+                    查看 Grounding（当前 1 · 历史{' '}
                     {insight.evidence.length}）
                   </summary>
 
@@ -571,6 +595,59 @@ function EvidenceBackedResult({
                       marginTop: '16px',
                     }}
                   >
+                    <div>
+                      <p
+                        style={{
+                          marginTop: 0,
+                          marginBottom: '8px',
+                          color: '#1d4ed8',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                        }}
+                      >
+                        当前 Reflection
+                      </p>
+
+                      <blockquote
+                        style={{
+                          margin: 0,
+                          padding: '12px',
+                          borderLeft: '4px solid #3b82f6',
+                          backgroundColor: 'white',
+                        }}
+                      >
+                        <p
+                          style={{
+                            margin: 0,
+                            lineHeight: '1.6',
+                          }}
+                        >
+                          “{insight.currentEvidence.excerpt}”
+                        </p>
+
+                        <footer
+                          style={{
+                            marginTop: '8px',
+                            color: '#6b7280',
+                            fontSize: '13px',
+                          }}
+                        >
+                          当前记录 · ID：
+                          {insight.currentEvidence.reflectionId}
+                        </footer>
+                      </blockquote>
+                    </div>
+
+                    <p
+                      style={{
+                        margin: 0,
+                        color: '#047857',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                      }}
+                    >
+                      历史 Evidence
+                    </p>
                     {insight.evidence.map(
                       (
                         evidence,
@@ -616,10 +693,10 @@ function EvidenceBackedResult({
                             >
                               {source
                                 ? new Date(
-                                    source.date
-                                  ).toLocaleDateString(
-                                    'zh-CN'
-                                  )
+                                  source.date
+                                ).toLocaleDateString(
+                                  'zh-CN'
+                                )
                                 : '日期不可用'}
                               {' · '}
                               ID：
