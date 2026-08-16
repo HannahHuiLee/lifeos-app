@@ -340,6 +340,76 @@ Case 4 通过了 Grounding 和 Evidence Valid 测试。
 
 ---
 
+### 实际结果
+
+- Status：`insights_found`
+- 模型：`gpt-4.1-mini`
+- 检索历史 Reflection：5 条
+- 返回 Insight：3 条
+- 系统移除无效 Evidence：2 条
+
+Insight 1：
+
+- Pattern：多次在星巴克进行 LifeOS 相关工作，有时能够专注完成任务，有时受到嘈杂环境影响。
+- Interpretation：模型认为用户经常选择星巴克工作，但环境对专注力的影响存在波动。
+- Confidence：`high`
+- Evidence：引用了 Case 4 的星巴克负面经历，以及两条内容相同、ID 不同的星巴克 LifeOS 正面记录。
+- 问题：该 Insight 主要分析工作地点，而当前 Case 5 的重点是继续开发和修复 Evidence-backed Reflection。两条相同内容还被当作独立事件，提高了重复程度和 Confidence。
+
+Insight 2：
+
+- Pattern：Evidence-backed Reflection 的 UI 功能是近期反复完成的具体任务。
+- Interpretation：模型认为用户近期重点开发和完善该 UI，并且已经多次完成该任务。
+- Confidence：`high`
+- Evidence：引用了两条 ID 不同但内容相同的“完成 Evidence-backed Reflection UI”记录。
+- 问题：两条记录来自同一内容的重复保存，不能证明用户多次完成了同一 UI 任务。“反复完成”和“已经多次完成”不符合真实事件数量。
+
+Insight 3：
+
+- Pattern：LifeOS 项目开发进度存在波动，既有高效完成，也有进度不快的情况。
+- Interpretation：模型认为效率波动可能与外部环境和任务复杂度有关，并认为用户能够意识和接受进度差异。
+- Confidence：`medium`
+- Evidence：最终只显示了一条关于星巴克被聊天声干扰、几乎没有完成任务的历史记录。
+- 问题：该历史 Evidence 没有明确说明当时执行的是 LifeOS 项目，也没有证明任务复杂度或用户“能够接受进度差异”。
+
+### 评分
+
+- Grounded：`FAIL`
+- Evidence Valid：`PASS`
+- Useful：`2/5`
+- Over-inference：`MINOR`
+- Removed Evidence Count：`2`
+
+### 评分理由
+
+- **Grounded = FAIL**：第一条主要分析星巴克环境，没有回应当前修复 Evidence Validation 和 UI 的进展；第二条依赖重复内容虚构“反复完成”；第三条使用没有明确提到 LifeOS 的历史记录支持 LifeOS 进度模式，并加入了任务复杂度和接受进度差异等未被证明的信息。
+- **Evidence Valid = PASS**：最终显示的 Evidence ID 和 excerpt 均来自 Retriever 提供的历史 Reflection。Validator 还成功移除了 2 条未通过验证的 Evidence。
+- **Useful = 2/5**：输出提到了 LifeOS、UI 和进度波动，但没有准确呈现项目从 UI 开发推进到 Evidence Validation 修复的连续过程。
+- **Over-inference = MINOR**：模型没有进行事业、人格或成功预测，但推断了“多次完成同一任务”“任务复杂度影响效率”和“能够接受进度差异”等未被充分证明的信息。
+- **Removed Evidence Count = 2**：应用层 Validator 成功阻止了 2 条不合法 Evidence 进入最终 UI。
+
+### 发现的问题
+
+1. **重复内容继续虚增模式强度**
+
+   两条 ID 不同但内容相同的 UI 完成记录，被模型解释为用户多次完成同一个任务，并生成 `high` Confidence。
+
+2. **模型没有抓住当前开发阶段的变化**
+
+   当前 Reflection 描述的是修复 Evidence Validation 和 UI，历史记录描述的是完成 UI。模型本可以识别项目从 UI 构建进入验证和修复阶段，但没有生成这个更具体的连续性 Insight。
+
+3. **相关主题不等于充分 Grounding**
+
+   Evidence 中出现 LifeOS 或 UI，并不自动证明“反复完成任务”或“项目开发进度长期波动”。
+
+4. **模型容易被最近的突出主题带偏**
+
+   Case 4 的星巴克环境内容影响了 Case 5，使第一条 Insight 继续讨论星巴克，而不是优先分析当前 LifeOS 开发进度。
+
+5. **Interpretation 引入未被证明的原因和心理判断**
+
+   “任务复杂度影响效率”和“用户
+
 ## 测试结果
 
 | Case | Status | Grounded | Evidence Valid | Useful 1–5 | Over-inference | Removed Evidence | Notes |
@@ -348,62 +418,148 @@ Case 4 通过了 Grounding 和 Evidence Valid 测试。
 | 2 | insights_found | FAIL | PASS | 2 | MINOR | 2 | 没有承认证据不足；第一个 insight 忽略当前陶艺内容并依赖重复的 LifeOS 历史记录；第二个将一次陶艺和一次 drumming 扩大为长期生活平衡策略。Validator 成功移除 2 条无效证据。 |
 | 3 | insights_found | FAIL | PASS | 1 | MINOR | 1 | 完全忽略当前会议 Reflection，转而总结陶艺和 LifeOS 历史记录；将单次经历扩大为稳定特征。Validator 成功移除 1 条无效证据。 |
 | 4 | insights_found | PASS | PASS | 4 | MINOR | 2 | 正确识别当前负面经历与历史正面记录之间的矛盾，得出星巴克专注效果存在波动；第二条将环境反思扩大为主动优化意图，存在轻度过度推断。Validator 移除 2 条无效 Evidence。 |
-| 5 |  |  |  |  |  |  |  |
+| 5 | insights_found | FAIL | PASS | 2 | MINOR | 2 | 识别到 LifeOS 和 UI 主题，但没有准确呈现当前从 UI 开发推进到 Evidence Validation 修复的连续过程；重复内容被解释为多次完成同一任务，且加入任务复杂度和接受进度差异等未充分支持的推断。Validator 移除 2 条无效 Evidence。 |
 
 ## 总结
 
-- 已完成：4/5
-- 全项通过：0/4
-- Grounded 通过：1/4
-- Evidence Valid 通过：4/4
-- Useful 达标：2/4
-- Over-inference 达标：0/4
+- 已完成：5/5
+- 全项通过：0/5
+- Grounded 通过：1/5
+- Evidence Valid 通过：5/5
+- Useful 达标：2/5
+- Over-inference 达标：0/5
 
-### 当前阶段结论
+### Eval V0 总体结论
 
-Case 4 是目前第一个通过 Grounded 测试的 Case。
+Evidence-backed Reflection 的完整技术流程已经跑通：
 
-模型正确识别了当前星巴克负面体验与历史正面体验之间的矛盾，没有继续断言星巴克总能提高效率，而是生成了“专注体验存在波动，可能受到当天噪音影响”的谨慎结论。
+Current Reflection → Retrieval → LLM Structured Output → Evidence Validation → UI Display → Manual Eval
 
-这说明模型具备处理反例和矛盾 Evidence 的能力，但该能力在不同场景中的表现并不稳定。
+应用层 Evidence 来源验证表现稳定。5 个 Case 最终展示的 Evidence 都通过了 ID 和 excerpt 验证，Validator 也在多个 Case 中成功移除了不合法 Evidence。
 
-### 当前已验证的能力
+但是，语义 Grounding 仍然不稳定。只有 Case 4 正确结合当前 Reflection 与历史 Evidence，识别了历史模式中的反例。其余 Case 存在忽略当前内容、依赖重复记录、使用不相关 Evidence 或扩大结论等问题。
 
-1. Retriever 能返回当前 Reflection 之前最近最多 5 条记录。
-2. LLM 能返回符合 Schema 的结构化结果。
-3. Validator 能移除未知 ID 或 excerpt 不匹配的 Evidence。
-4. Case 1–4 最终显示的 Evidence 均通过来源验证。
-5. Case 4 中模型能够识别当前经历与历史模式之间的矛盾。
-6. UI 能显示 Insight、Confidence、Evidence 和移除警告。
+### 最终评分
+
+| Case | 场景 | Grounded | Evidence Valid | Useful | Over-inference | Removed Evidence |
+|---|---|---|---|---:|---|---:|
+| 1 | 强重复模式 | FAIL | PASS | 3/5 | MINOR | 0 |
+| 2 | 没有相关历史证据 | FAIL | PASS | 2/5 | MINOR | 2 |
+| 3 | 防止心理状态过度推断 | FAIL | PASS | 1/5 | MINOR | 1 |
+| 4 | 与历史模式矛盾 | PASS | PASS | 4/5 | MINOR | 2 |
+| 5 | 有证据但防止身份扩大 | FAIL | PASS | 2/5 | MINOR | 2 |
+
+### 已经达到的目标
+
+1. 用户可以输入并保存真实 Reflection。
+2. 系统可以检索当前 Reflection 之前最近最多 5 条历史记录。
+3. LLM 能返回符合 Schema 的结构化 Insight。
+4. Insight 能引用真实历史 Reflection。
+5. 未通过 ID 或 excerpt 验证的 Evidence 会被移除。
+6. 无效 Evidence 不会静默进入 UI。
+7. UI 能显示 Pattern、Interpretation、Confidence 和可展开 Evidence。
+8. 已完成并记录 5 个手动 Eval Case。
+
+### 尚未达到的质量目标
+
+1. 模型不能稳定地将当前 Reflection 作为分析中心。
+2. 来源真实的 Evidence 不一定与 Pattern 语义相关。
+3. 内容相同但 ID 不同的记录会被当作独立事件。
+4. 单次事件容易被扩大为长期模式、稳定特征或用户意图。
+5. 没有相关历史 Evidence 时，模型不能稳定返回 `insufficient_evidence`。
+6. UI 没有明确展示当前 Reflection 如何参与每个 Insight 的 Grounding。
+7. Confidence 没有充分反映证据数量、重复情况和矛盾程度。
 
 ### 主要失败模式
 
-1. 内容相同但 ID 不同的 Reflection 会被当作独立事件。
-2. 模型可能忽略当前 Reflection，只总结历史记录。
-3. 来源真实的 Evidence 可能与当前 Reflection 或 Pattern 语义无关。
-4. 少量或单次活动容易被扩大为长期行为模式或稳定特征。
-5. 模型可能推断用户没有明确表达的意图，例如“正在优化工作环境”。
-6. UI 没有明确展示当前 Reflection 如何参与 Insight 的 Grounding。
+#### 1. 当前 Reflection 被忽略
 
-### Case 4 带来的新发现
+Case 2、Case 3 和部分 Case 5 中，模型主要总结历史记录，而没有围绕当前内容生成 Insight。
 
-1. 当当前 Reflection 明确否定历史模式时，模型能够注意到反例。
-2. 模型可以将绝对模式修正为具有条件性的模式。
-3. 多条正面历史记录加一条当前反例，可以支持“效果存在波动”的结论。
-4. 对矛盾模式使用 `medium` Confidence 会比 `high` 更谨慎。
-5. 即使 Pattern 被充分支持，Interpretation 仍可能包含额外的意图推断。
+#### 2. 重复记录被当作独立 Evidence
 
-### 下一版改进候选
+Case 1、Case 2 和 Case 5 中，内容相同但 ID 不同的 Reflection 虚增了事件数量、模式强度和 Confidence。
 
-1. 对重复或高度相似的历史 Reflection 进行语义去重。
-2. 要求每个 Insight 明确说明当前 Reflection 与历史 Evidence 的关系。
-3. 将 `currentEvidence` 与 `historicalEvidence` 分开。
-4. 对长期模式要求至少两个内容不同、代表独立事件的历史 Evidence。
-5. 增加 Evidence 与 Pattern 的语义相关性验证。
-6. 对存在反例或矛盾 Evidence 的 Insight 限制最高 Confidence。
-7. Prompt 中明确禁止推断用户未表达的目标、意图或人格。
-8. 没有相关历史 Evidence 时，优先返回 `insufficient_evidence`。
+#### 3. Provenance Valid 不等于 Semantically Grounded
 
-### 测试纪律
+Validator 能确认 Evidence 来自检索上下文，但不能确认：
 
-为了保证 Eval V0 的测试条件一致，在完成 Case 5 之前，不修改 Prompt、Schema、Retriever、Validator 或 UI 判断逻辑。
+- Evidence 是否与当前 Reflection 相关；
+- Evidence 是否真正支持 Pattern；
+- Interpretation 是否超出 Evidence；
+- 多条 Evidence 是否代表独立事件。
+
+#### 4. 模型扩大少量观察
+
+模型出现了以下轻度扩大：
+
+- 将少量活动解释为长期生活平衡策略；
+- 将一次新体验解释为稳定的开放和成长倾向；
+- 将反思环境影响解释为主动优化环境；
+- 将重复 UI 记录解释为多次完成同一任务；
+- 推断任务复杂度和接受进度差异。
+
+### 最重要的下一版改进
+
+#### Priority 1：让当前 Reflection 必须参与 Grounding
+
+修改结构化输出，使每个 Insight 明确包含：
+
+- `currentEvidence`
+- `historicalEvidence`
+
+应用代码同时验证当前 excerpt 和历史 Evidence。
+
+#### Priority 2：对 Retrieval 结果进行内容去重
+
+在传给 LLM 前，对完全相同或高度相似的 Reflection 去重，避免重复保存的数据被当作独立事件。
+
+#### Priority 3：增加模式最低证据要求
+
+只有至少两个内容不同、代表独立事件并且语义相关的历史 Reflection，才允许生成长期模式。
+
+证据不足时返回：insufficient_evidence
+
+
+#### Priority 4：限制 Interpretation 的推断范围
+Prompt 明确禁止推断 Evidence 中没有表达的：
+- 人格；
+- 心理诊断；
+- 长期身份；
+- 未来结果；
+- 用户意图；
+- 未知因果关系。
+
+
+#### Priority 5：让 Confidence 由证据质量决定
+1. Confidence 应考虑：
+- 独立 Evidence 数量；
+- Evidence 是否重复；
+- 是否存在反例；
+- Evidence 与当前 Reflection 的相关程度；
+- Pattern 是否包含推断。
+
+2. Definition of Done 检查
+
+[]可以输入并保存真实 Reflection
+
+[]可以检索历史 Reflection
+
+[]LLM 返回结构化 Insight
+
+[]Insight 可以显示真实 Evidence
+
+[]非法 Evidence 不能静默进入 UI
+
+[]可以手动执行至少 5 个 Eval Case
+
+[]模型能稳定围绕当前 Reflection 生成 Grounded Insight
+
+[]重复内容不会虚增模式强度
+
+[]证据不足时能稳定返回 insufficient_evidence
+
+### 最终判断
+今天的 MVP 工程目标已经完成，Evidence-backed Reflection 的端到端流程可以运行，应用层 Evidence Validation 也已证明有效。
+Eval V0 同时表明，下一版不应优先增加向量数据库或更复杂的 Retrieval。当前最重要的问题是 Grounding 约束、重复数据处理和 Evidence 的语义相关性。
+因此，下一步应先改进结构化输出和验证边界，再考虑 embeddings、vector search 或 hybrid retrieval。
