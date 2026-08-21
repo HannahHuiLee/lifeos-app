@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "eval:evidence-v2": "zsh scripts/run-evidence-backed-reflection-v2.zsh ."
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

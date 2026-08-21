@@ -1,0 +1,3 @@
+reflections_unchanged=PASS
+ai_analysis_unchanged=PASS
+run_finished_at=2026-08-21T12:22:07Z

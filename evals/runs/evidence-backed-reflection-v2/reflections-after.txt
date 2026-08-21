@@ -1,0 +1,23 @@
+cmskp2t1b0000hwhnmpcl1fb3|今天我开始搭建 LifeOS 的 Reflection 功能。|1786212960383
+cmskpbqxw0001hwhnx0bk48av|今天参加了archery class 今天没有听懂规则 感觉有点无聊了|1786213377572
+cmskqupla0002pmlq1a4lb92v|今天在星巴克呆了5h， 这的学习氛围不错|1786215941903
+cmsktlsly0000mwvbpb16fqgn|Next: Weekly Review generation based on reflections + completed goals.|1786220564758
+cmsm2cpj2000a12yhen0vjqlj|今天又是在starbucks 学习 效率拉满的一天 完成了 一个English coach mvp 成就感也慢慢的 谢谢ai|1786295723583
+cmsukr7e00000anaui9uxipvh|今天在startbucks 呆了3h 继续完成lifeos|1786810362408
+cmsum7tit000019ajt7h49rwh|今天没去archery class 因为要去参加 ai meetup 同时可以有整块的时间做lifeos的项目|1786812817205
+cmsumjt78000010p8w63tgrwf|今天没去archery class 因为要去参加 ai meetup 同时可以有整块的时间做lifeos的项目 目前还有半个小时就的去参加活动了|1786813376658
+cmsumvewl0000drqnmeb3bzo7|lifeos今天新添加了Memory → Retrieval → Reasoning → Structured Output → Validation → Evidence → Eval|1786813918005
+cmsvwwpa70000134bobd3t23n|今天上完drumming课程 来starbucks继续lifeos的项目 目前感觉可以待5h左右 专心做项目 又是充实的一天|1786891240447
+cmsvxr25z0000gduwad4x6uen|今天又去星巴克做 LifeOS。我在那里专注了三个小时，完成了 Evidence-backed Reflection 的 UI，感觉很有成就感。|1786892656822
+cmsvy4cxg0001gduwjd8vfm8b|今天又去星巴克做 LifeOS。我在那里专注了三个小时，完成了 Evidence-backed Reflection 的 UI，感觉很有成就感。|1786893277301
+cmsvyk1q30002gduweaxz8hnf|今天第一次去社区陶艺课。我练习了拉坯，手上全是泥，但觉得很新鲜。我以前没有记录过类似经历。|1786894009275
+cmsvyxw060003gduwkfysgi1m|今天开会前有些紧张，会议开始后就恢复正常了。会议最终进行得很顺利。|1786894655046
+cmsvzq8bo0004gduwu89vu2jq|今天也去了星巴克，但一直被聊天声打断，三个小时几乎没有完成任务。我发现这个环境并不总能帮助我专注。|1786895977381
+cmsvzytc60005gduwbby0avy1|今天继续开发 LifeOS，主要是在修复 Evidence-backed Reflection 的证据验证和 UI。虽然进度不快，但我完成了计划中的功能。|1786896377863
+cmsw1qcwj0000kvghhx1714ia|根据eval 继续修改代码|1786899342546
+cmsw1vti50001kvghtnfyztep|测试 relationship with reflection|1786899597342
+cmsw6062r000013xqw3cvd6jw|今天继续修改 LifeOS 的 Evidence-backed Reflection。我更新了 Grounding 合同和 currentEvidence 验证，并完成了计划中的测试。|1786906518723
+cmsw62dza000113xq3mjs497x|今天继续开发 LifeOS，主要是在修复 Evidence-backed Reflection 的证据验证和 UI。虽然进度不快，但我完成了计划中的功能。|1786906622278
+cmsw654r7000213xq15per8v1|今天继续修改 LifeOS 的 Evidence-backed Reflection，但 Grounding 合同测试没有通过。我没有完成计划中的验证，说明这项开发并不总能按计划完成。|1786906750291
+cmsw7qgz9000313xqjczulq0e|今天在starbucks呆了4h 一直在做lifeos 的项目 喜欢这种一边build 一边学习到新的东西的感觉 而且今天让我学到了 ai给的答案中 有看起来挺好 但细看错误也不少 不能完全无脑相信ai|1786909425525
+cmt2v0tpa00014r116k5glocy|早上7点左右醒来 犹豫要不要去星巴克写项目 到11点开完会后 再回来 还是在家里写 去星巴克需要收拾可能得20分钟 在家里可以直接写 在星巴克效率更高点|1787311336798

@@ -1,0 +1,6 @@
+case	http_status	model	status	insight_count	removed_evidence
+1	200	gpt-4.1-mini	insights_found	1	0
+2	200	gpt-4.1-mini	insufficient_evidence	0	0
+3	200	gpt-4.1-mini	insufficient_evidence	0	0
+4	200	gpt-4.1-mini	insights_found	1	0
+5	200	gpt-4.1-mini	insights_found	1	0

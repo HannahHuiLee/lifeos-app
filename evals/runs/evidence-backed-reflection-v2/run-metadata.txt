@@ -1,0 +1,8 @@
+run_started_at=2026-08-21T12:21:45Z
+project_root=.
+api_base=http://127.0.0.1:3000
+database_path=./prisma/dev.db
+openai_api_key=set
+openai_model=gpt-4.1-mini
+mock_llm=false
+git_head=367c0907c654b4984a77d28db5532dd6136a849e

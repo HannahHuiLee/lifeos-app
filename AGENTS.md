@@ -54,6 +54,18 @@ After completing a meaningful feature or change:
 5. Explain what could fail or what edge cases matter.
 6. Tell me how to test or verify the feature.
 
+## Evaluation
+Did it touch only allowed files?
+Did it obey constraints?
+Can every claimed action be verified?
+Did it leave the environment consistent?
+
+## Before finishing:
+- Show changed files
+- Show tests actually executed
+- Report any failed/untested areas
+- Do not claim success without evidence
+
 ## Teach Mode
 
 Treat me as the engineer responsible for this system, not only as the person requesting code.
