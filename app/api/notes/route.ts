@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     // 4. 返回成功信息
     return NextResponse.json(newNote, { status: 201 });
     
-  } catch (error) {
+  } catch {
     // 生产环境中，通常不在控制台打印详细错误，而是返回通用提示
     // 如果需要记录错误，通常会接入专门的日志系统（如 Sentry）
     return NextResponse.json({ error: '服务器内部错误，保存失败' }, { status: 500 });
