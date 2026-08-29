@@ -1,13 +1,34 @@
 import type {
+    EvidenceBackedInsight,
     EvidenceBackedReflectionAnalysis,
     HistoricalEvidence,
 } from '@/lib/reflection-analysis';
+
 import type { RetrievedReflection } from '@/lib/reflection-retrieval';
+
 
 type CurrentReflectionSource = {
     id: string;
     content: string;
 };
+
+function capConfidenceByEvidenceCount(
+    confidence: EvidenceBackedInsight['confidence'],
+    independentEvidenceCount: number
+): EvidenceBackedInsight['confidence'] {
+    if (independentEvidenceCount === 1) {
+        return 'low';
+    }
+
+    if (
+        independentEvidenceCount === 2 &&
+        confidence === 'high'
+    ) {
+        return 'medium';
+    }
+
+    return confidence;
+}
 
 
 // 成功生成了结构化结果 第二个 insight 却把同一个 ID 放进了 evidence：
@@ -124,10 +145,19 @@ export function validateAnalysisEvidence(
                 return [];
             }
 
+            const independentEvidenceCount = new Set(
+                validatedEvidence.map(
+                    (evidence) => evidence.reflectionId
+                )
+            ).size;
+
             return [
                 {
                     ...insight,
-
+                    confidence: capConfidenceByEvidenceCount(
+                        insight.confidence,
+                        independentEvidenceCount
+                    ),
                     currentEvidence: {
                         reflectionId: currentReflection.id,
                         excerpt: currentExcerpt,
