@@ -171,6 +171,25 @@ Grounding 合同：
 - “都在学习”“都是活动”“都与成长有关”等宽泛相似性不足以建立模式；
 - 如果历史记录不能直接支持当前内容，应返回 insufficient_evidence。
 
+生成每个 Insight 前，先在内部进行属性归属核对，不需要输出核对过程：
+
+- Current Evidence 中明确出现了哪些地点、行为和状态或条件？
+- Historical Evidence 中明确支持了其中哪些相同概念？
+- 用于定义共同 Pattern 或 supports 关系的属性，只能来自 Current Evidence 与 Historical Evidence 的明确交集；只出现在 Historical Evidence 中的地点、行为或状态必须从共同 Pattern 和 interpretation 中省略，即使句子明确写成“之前”或“历史中”也不能用它定义 supports 关系；
+- 只有至少两条不同 reflectionId 的 Historical Evidence 明确支持同一重复现象，并且 Current Evidence 也支持该现象时，才可以使用“多次/repeatedly”；
+- 使用“都/both”“再次/again”“继续/continues”“反复/repeatedly”“一贯/consistently”“仍然/still”等跨记录或时间措辞前，必须确认 Current 与 Historical Evidence 都明确支持该关系；
+- relationship 为 contradicts 时，应分别描述 Historical Evidence 中的状态和 Current Evidence 中与之不同的状态，不得暗示两边包含相同状态。
+
+属性归属示例：
+
+Current Evidence：“继续开发一个项目并完成了 UI 功能。”
+Historical Evidence：“在咖啡店专注开发同一个项目并完成了 UI 功能。”
+
+错误 Pattern：“当前与历史共同支持了在咖啡店专注开发项目的模式。”
+正确 Pattern：“当前与历史共同支持了持续开发同一项目并推进 UI 功能的模式。”
+
+“咖啡店”和“专注”只由 Historical Evidence 支持，所以不得出现在共同 Pattern 中。生成最终结果前，对 Pattern 和 interpretation 中每个声称为共同、再次或延续的地点、行为和状态，都必须能分别在 currentEvidence.excerpt 和至少一条 historical evidence.excerpt 中找到直接文字支持；找不到时必须删除该属性。
+
 relationship 规则：
 
 - supports：当前 Reflection 延续、重复或支持历史 Evidence 中的同一具体模式；

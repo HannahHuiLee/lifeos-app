@@ -1,0 +1,11 @@
+run	http_status	model	analysis_status	insight_count	removed_evidence
+01	200	gpt-4.1-mini	insights_found	1	0
+02	200	gpt-4.1-mini	insights_found	1	0
+03	200	gpt-4.1-mini	insights_found	1	0
+04	200	gpt-4.1-mini	insights_found	1	0
+05	200	gpt-4.1-mini	insights_found	1	0
+06	200	gpt-4.1-mini	insights_found	1	0
+07	200	gpt-4.1-mini	insights_found	1	0
+08	200	gpt-4.1-mini	insights_found	1	0
+09	200	gpt-4.1-mini	insights_found	1	0
+10	200	gpt-4.1-mini	insights_found	1	0
