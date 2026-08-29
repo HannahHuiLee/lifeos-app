@@ -39,6 +39,29 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 数据库：
 terminal：  npx prisma studio
 
+## Grounding Reliability V3
+
+### Deterministically improved
+
+Evidence-backed Reflection now has two deterministic reliability safeguards, with regression coverage:
+
+- normalized exact-content deduplication before LLM context construction, including Current ↔ Historical and Historical ↔ Historical duplicates;
+- confidence caps based on validated independent Historical Evidence;
+- regression coverage for Reflection Retrieval and Evidence Validation.
+
+### Evaluated but not solved
+
+Semantic Current/Historical attribution was evaluated but is not solved. Prompt constraints were strengthened, then Case 5 was run ten times with `gpt-4.1-mini` after the prompt was frozen. Only 2/10 runs met the strict Grounding criteria, so the prompt change is recorded as a partial, unstable mitigation rather than a fix.
+
+### Current reliability boundary
+
+The current reliability boundary is explicit: **LifeOS can validate evidence provenance more reliably than it can validate semantic claim entailment.** The project does not claim production-grade Grounding or semantic correctness.
+
+### Next reliability direction
+
+Next reliability work should explore claim-level Grounding structure, semantic verification, and repeated eval pass-rate tracking. Detailed reasoning and lessons are documented in [Grounding Reliability V3 — Engineering Notes](docs/grounding-reliability-v3-engineering-notes.md).
+
 ## Development Notes
 
 - [Reflection MVP — 2026-08-08](docs/dev-notes-2026-08-08.md)
+- [Grounding Reliability V3 — Evidence Validity Is Not Semantic Grounding](docs/grounding-reliability-v3-engineering-notes.md)
