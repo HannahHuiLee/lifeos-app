@@ -5,15 +5,23 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { listeningPractices } from '@/lib/listening-practices';
+
 import type { ListeningAnalysis } from '@/lib/listening-analysis';
+
+import type {
+    ListeningPracticeSnapshot,
+} from '@/lib/listening-contracts';
+
+import CustomMaterialForm from './CustomMaterialForm';
 
 
 export default function ListeningPage() {
     const practice = listeningPractices[0];
 
-    // const [isPlaying, setIsPlaying] = useState(false);
+    const [customPractice, setCustomPractice] =
+        useState<ListeningPracticeSnapshot | null>(null);
+
     const [showTranscript, setShowTranscript] = useState(false);
-    // const [message, setMessage] = useState('');
 
     // Write Answer → Save → Mock AI Analyze
     const [answer, setAnswer] = useState('');
@@ -48,10 +56,19 @@ export default function ListeningPage() {
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({
-                        practiceId: practice.id,
-                        answer,
-                    }),
+                    //这是 UI 和 snapshot persistence 真正接通的位置。
+                    body: JSON.stringify(
+                        customPractice
+                            ? {
+                                practiceSnapshot:
+                                    customPractice,
+                                answer,
+                            }
+                            : {
+                                practiceId: practice.id,
+                                answer,
+                            }
+                    ),
                 }
             );
 
@@ -87,6 +104,24 @@ export default function ListeningPage() {
         }
     }
 
+    function handlePracticeGenerated(
+        snapshot: ListeningPracticeSnapshot
+    ) {
+        setCustomPractice(snapshot);
+        setShowTranscript(false);
+        setAnswer('');
+        setAnalysis(null);
+        setSubmitMessage('');
+    }
+
+    function handleNewMaterial() {
+        setCustomPractice(null);
+        setShowTranscript(false);
+        setAnswer('');
+        setAnalysis(null);
+        setSubmitMessage('');
+    }
+
     return (
         <main
             style={{
@@ -102,6 +137,23 @@ export default function ListeningPage() {
                 translating every word.
             </p>
 
+            {!customPractice ? (
+                <CustomMaterialForm
+                    onGenerated={handlePracticeGenerated}
+                />
+            ) : (
+                <button
+                    type="button"
+                    onClick={handleNewMaterial}
+                    disabled={isSubmitting}
+                    style={{
+                        marginTop: '20px',
+                    }}
+                >
+                    Add different material
+                </button>
+            )}
+
             <section
                 style={{
                     marginTop: '28px',
@@ -111,61 +163,216 @@ export default function ListeningPage() {
                     backgroundColor: '#f9fafb',
                 }}
             >
-                <p style={{ margin: 0, color: '#6b7280' }}>
-                    {practice.level}
-                </p>
+                {customPractice ? (
+                    <>
+                        <p
+                            style={{
+                                margin: 0,
+                                color: '#6b7280',
+                            }}
+                        >
+                            {customPractice.source.difficulty}
+                        </p>
 
-                <h2 style={{ marginTop: '8px' }}>{practice.title}</h2>
+                        <h2 style={{ marginTop: '8px' }}>
+                            {customPractice.source.title}
+                        </h2>
 
-                <audio
-                    controls
-                    preload="metadata"
-                    style={{
-                        width: '100%',
-                        marginTop: '20px',
-                    }}
-                >
-                    <source src={practice.audioSrc} type="audio/mpeg" />
+                        <p style={{ color: '#6b7280' }}>
+                            Topic: {customPractice.exercise.topic}
+                        </p>
 
-                    Your browser does not support audio playback.
-                </audio>
-
-                <p
-                    style={{
-                        margin: '8px 0 0',
-                        color: '#6b7280',
-                        fontSize: '13px',
-                    }}
-                >
-                    This lesson uses an AI-generated voice.
-                </p>
-
-                <button
-                    type="button"
-                    onClick={() => setShowTranscript((value) => !value)}
-                    style={{
-                        marginTop: '18px',
-                    }}
-                >
-                    {showTranscript ? 'Hide transcript' : 'Show transcript'}
-                </button>
-
-                {showTranscript && (
-                    <div
-                        style={{
-                            marginTop: '24px',
-                            paddingTop: '20px',
-                            borderTop: '1px solid #e5e7eb',
-                        }}
-                    >
-                        <h3>Transcript</h3>
-
-                        {practice.turns.map((turn, index) => (
-                            <p key={index} style={{ lineHeight: 1.6 }}>
-                                <strong>{turn.speaker}:</strong> {turn.text}
+                        {customPractice.source.sourceUrl && (
+                            <p>
+                                <a
+                                    href={
+                                        customPractice.source.sourceUrl
+                                    }
+                                    target="_blank"
+                                    rel="noreferrer"
+                                >
+                                    Open original source ↗
+                                </a>
                             </p>
-                        ))}
-                    </div>
+                        )}
+
+                        <p
+                            style={{
+                                color: '#6b7280',
+                                lineHeight: 1.6,
+                            }}
+                        >
+                            Listen to the original source once
+                            before revealing the transcript.
+                        </p>
+
+                        <details
+                            style={{
+                                marginTop: '18px',
+                            }}
+                        >
+                            <summary>
+                                Useful phrases and vocabulary
+                            </summary>
+
+                            <h3>Useful phrases</h3>
+
+                            <ul style={{ lineHeight: 1.7 }}>
+                                {customPractice.exercise.usefulPhrases.map(
+                                    (phrase) => (
+                                        <li key={phrase}>{phrase}</li>
+                                    )
+                                )}
+                            </ul>
+
+                            <h3>Vocabulary</h3>
+
+                            <dl>
+                                {customPractice.exercise.vocabulary.map(
+                                    (item) => (
+                                        <div
+                                            key={item.term}
+                                            style={{
+                                                marginTop: '12px',
+                                            }}
+                                        >
+                                            <dt>
+                                                <strong>{item.term}</strong>
+                                            </dt>
+                                            <dd>{item.meaning}</dd>
+                                        </div>
+                                    )
+                                )}
+                            </dl>
+                        </details>
+
+                        <button
+                            type="button"
+                            onClick={() =>
+                                setShowTranscript(
+                                    (value) => !value
+                                )
+                            }
+                            style={{
+                                marginTop: '18px',
+                            }}
+                        >
+                            {showTranscript
+                                ? 'Hide transcript'
+                                : 'Show transcript'}
+                        </button>
+
+                        {showTranscript && (
+                            <div
+                                style={{
+                                    marginTop: '24px',
+                                    paddingTop: '20px',
+                                    borderTop:
+                                        '1px solid #e5e7eb',
+                                }}
+                            >
+                                <h3>Transcript</h3>
+
+                                <p
+                                    style={{
+                                        whiteSpace: 'pre-wrap',
+                                        lineHeight: 1.7,
+                                    }}
+                                >
+                                    {
+                                        customPractice.source
+                                            .transcript
+                                    }
+                                </p>
+                            </div>
+                        )}
+                    </>
+                ) : (
+                    <>
+                        <p
+                            style={{
+                                margin: 0,
+                                color: '#6b7280',
+                            }}
+                        >
+                            {practice.level}
+                        </p>
+
+                        <h2 style={{ marginTop: '8px' }}>
+                            {practice.title}
+                        </h2>
+
+                        <audio
+                            controls
+                            preload="metadata"
+                            style={{
+                                width: '100%',
+                                marginTop: '20px',
+                            }}
+                        >
+                            <source
+                                src={practice.audioSrc}
+                                type="audio/mpeg"
+                            />
+
+                            Your browser does not support audio
+                            playback.
+                        </audio>
+
+                        <p
+                            style={{
+                                margin: '8px 0 0',
+                                color: '#6b7280',
+                                fontSize: '13px',
+                            }}
+                        >
+                            This lesson uses an AI-generated
+                            voice.
+                        </p>
+
+                        <button
+                            type="button"
+                            onClick={() =>
+                                setShowTranscript(
+                                    (value) => !value
+                                )
+                            }
+                            style={{
+                                marginTop: '18px',
+                            }}
+                        >
+                            {showTranscript
+                                ? 'Hide transcript'
+                                : 'Show transcript'}
+                        </button>
+
+                        {showTranscript && (
+                            <div
+                                style={{
+                                    marginTop: '24px',
+                                    paddingTop: '20px',
+                                    borderTop:
+                                        '1px solid #e5e7eb',
+                                }}
+                            >
+                                <h3>Transcript</h3>
+
+                                {practice.turns.map(
+                                    (turn, index) => (
+                                        <p
+                                            key={index}
+                                            style={{ lineHeight: 1.6 }}
+                                        >
+                                            <strong>
+                                                {turn.speaker}:
+                                            </strong>{' '}
+                                            {turn.text}
+                                        </p>
+                                    )
+                                )}
+                            </div>
+                        )}
+                    </>
                 )}
             </section>
 
@@ -177,18 +384,61 @@ export default function ListeningPage() {
                     borderRadius: '12px',
                 }}
             >
-                <h2>What are they talking about?</h2>
+                <h2>
+                    {customPractice
+                        ? customPractice.exercise
+                            .mainIdeaQuestion
+                        : 'What are they talking about?'}
+                </h2>
 
-                <p style={{ color: '#6b7280', lineHeight: 1.6 }}>
-                    Use simple English. Think about: Who? What happened?
-                    Why? What&apos;s next?
-                </p>
+                {customPractice ? (
+                    <>
+                        <p
+                            style={{
+                                color: '#6b7280',
+                                lineHeight: 1.6,
+                            }}
+                        >
+                            {
+                                customPractice.exercise
+                                    .summaryPrompt
+                            }
+                        </p>
+
+                        <h3>Listen for these details</h3>
+
+                        <ul style={{ lineHeight: 1.7 }}>
+                            {customPractice.exercise.detailQuestions.map(
+                                (question) => (
+                                    <li key={question}>
+                                        {question}
+                                    </li>
+                                )
+                            )}
+                        </ul>
+                    </>
+                ) : (
+                    <p
+                        style={{
+                            color: '#6b7280',
+                            lineHeight: 1.6,
+                        }}
+                    >
+                        Use simple English. Think about:
+                        Who? What happened? Why? What&apos;s
+                        next?
+                    </p>
+                )}
 
                 <textarea
                     value={answer}
                     onChange={handleAnswerChange}
                     disabled={isSubmitting}
-                    placeholder="They are talking about..."
+                    placeholder={
+                        customPractice
+                            ? 'The speaker’s main point is...'
+                            : 'They are talking about...'
+                    }
                     style={{
                         width: '100%',
                         minHeight: '160px',

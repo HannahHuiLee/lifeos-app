@@ -3,10 +3,17 @@ import { zodTextFormat } from 'openai/helpers/zod';
 import { NextResponse } from 'next/server';
 
 import {
+  ListeningPracticeSnapshotSchema,
+  type ListeningPracticeSnapshot,
+} from '@/lib/listening-contracts';
+
+import {
   ListeningAnalysisSchema,
   type ListeningAnalysis,
 } from '@/lib/listening-analysis';
+
 import { getListeningPractice } from '@/lib/listening-practices';
+
 import { prisma } from '@/lib/prisma';
 
 export async function POST(
@@ -27,13 +34,72 @@ export async function POST(
       );
     }
 
-    const practice = getListeningPractice(session.practiceId);
+    let customSnapshot:
+      | ListeningPracticeSnapshot
+      | null = null;
 
-    if (!practice) {
-      return NextResponse.json(
-        { error: '这次练习使用的听力素材不存在' },
-        { status: 404 }
+    let transcript: string;
+    let difficulty: string;
+    let evaluationReference: string;
+
+    if (session.practiceSnapshot !== null) {
+      customSnapshot = parseStoredSnapshot(
+        session.practiceSnapshot
       );
+
+      if (!customSnapshot) {
+        return NextResponse.json(
+          {
+            error:
+              '这次练习保存的 snapshot 无效',
+          },
+          { status: 500 }
+        );
+      }
+
+      transcript =
+        customSnapshot.source.transcript;
+
+      difficulty =
+        customSnapshot.source.difficulty;
+
+      evaluationReference = [
+        `Main idea question: ${customSnapshot.exercise.mainIdeaQuestion}`,
+        'Detail questions:',
+        ...customSnapshot.exercise.detailQuestions.map(
+          (question) => `- ${question}`
+        ),
+      ].join('\n');
+    } else {
+      const practice =
+        getListeningPractice(session.practiceId);
+
+      if (!practice) {
+        return NextResponse.json(
+          {
+            error:
+              '这次练习使用的听力素材不存在',
+          },
+          { status: 404 }
+        );
+      }
+
+      transcript = practice.turns
+        .map(
+          (turn) =>
+            `${turn.speaker}: ${turn.text}`
+        )
+        .join('\n');
+
+      difficulty = practice.level;
+
+      evaluationReference = `
+Main idea: ${practice.reference.mainIdea}
+Who: ${practice.reference.who}
+What happened: ${practice.reference.whatHappened}
+Why: ${practice.reference.why}
+What's next: ${practice.reference.whatsNext}
+  `.trim();
     }
 
     const useMock = process.env.MOCK_LLM === 'true';
@@ -41,7 +107,36 @@ export async function POST(
     let result: ListeningAnalysis;
     let model: string;
 
-    if (useMock) {
+    if (useMock && customSnapshot) {
+      model = 'mock-custom-flow-v1';
+
+      result = {
+        understandingScore: 0,
+
+        mainIdea: {
+          captured: false,
+          feedback:
+            'Mock 模式只验证自定义练习的数据流，不执行真实的内容理解评估。',
+        },
+
+        keyInformation: {
+          who: false,
+          whatHappened: false,
+          why: false,
+          whatsNext: false,
+        },
+
+        missedKeyInformation: [
+          '请关闭 MOCK_LLM 并使用真实模型获得基于 transcript 的反馈。',
+        ],
+
+        suggestedSummary: session.answer,
+
+        improvements: [
+          '使用真实模型完成这次自定义听力评估。',
+        ],
+      };
+    } else if (useMock) {
       model = 'mock-v1';
 
       result = {
@@ -82,10 +177,6 @@ export async function POST(
 
       const openai = new OpenAI({ apiKey });
 
-      const transcript = practice.turns
-        .map((turn) => `${turn.speaker}: ${turn.text}`)
-        .join('\n');
-
       const response = await openai.responses.parse({
         model,
         input: [
@@ -101,7 +192,8 @@ export async function POST(
 - 判断用户是否抓住 main idea；
 - 判断 Who、What happened、Why、What's next 是否被提到；
 - missedKeyInformation 只列出重要且确实遗漏或理解错误的信息；
-- suggestedSummary 必须是简单、自然的英语，适合 A2–B1 学习者；
+- suggestedSummary 必须是简单、自然的英语，并适合本次练习指定的难度；
+- 如果 Who、Why 或 What's next 对这段内容确实不适用，不要把“不适用”当作用户遗漏；
 - improvements 使用中文，只指出最值得改善的 1–2 点；
 - feedback 和 missedKeyInformation 使用中文；
 - understandingScore 必须是 0 到 100 的整数；
@@ -114,16 +206,15 @@ export async function POST(
 听力原文：
 ${transcript}
 
-参考信息：
-Main idea: ${practice.reference.mainIdea}
-Who: ${practice.reference.who}
-What happened: ${practice.reference.whatHappened}
-Why: ${practice.reference.why}
-What's next: ${practice.reference.whatsNext}
+练习难度：
+${difficulty}
+
+评分参考或练习重点：
+${evaluationReference}
 
 用户的英文总结：
 ${session.answer}
-            `.trim(),
+  `.trim(),
           },
         ],
         text: {
@@ -171,5 +262,34 @@ ${session.answer}
       { error: '分析 Listening Session 失败' },
       { status: 500 }
     );
+  }
+}
+
+function parseStoredSnapshot(
+  value: string
+): ListeningPracticeSnapshot | null {
+  try {
+    const parsed =
+      ListeningPracticeSnapshotSchema.safeParse(
+        JSON.parse(value)
+      );
+
+    if (!parsed.success) {
+      console.error(
+        'Invalid stored listening snapshot:',
+        parsed.error.flatten()
+      );
+
+      return null;
+    }
+
+    return parsed.data;
+  } catch (error) {
+    console.error(
+      'Failed to parse listening snapshot:',
+      error
+    );
+
+    return null;
   }
 }

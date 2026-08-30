@@ -50,9 +50,11 @@ model RecentPatternAnalysis {
   createdAt       DateTime @default(now())
 }
 
-// practiceId： 使用了哪一段听力素材
-// answer： 用户的英文口头总结；MVP 先用文字输入模拟
-// analysis： AI 返回的结构化结果，暂时以 JSON 字符串保存
+
+// practiceId：V1 固定练习标识；旧 Session 使用它回到静态 catalog
+// practiceSnapshot：V2 自定义 source + exercise 的不可变 JSON 快照
+// answer：用户的英文总结
+// analysis：AI 返回的结构化反馈，以 JSON 字符串保存
 
 model ListeningSession {
   id         String   @id @default(cuid())
@@ -60,5 +62,6 @@ model ListeningSession {
   answer     String
   analysis   String?
   model      String?
+  practiceSnapshot String?
   createdAt  DateTime @default(now())
 }

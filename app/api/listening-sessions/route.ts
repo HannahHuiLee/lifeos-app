@@ -8,6 +8,9 @@ import {
     type ListeningAnalysis,
 } from '@/lib/listening-analysis';
 
+import {
+    CreateListeningSessionInputSchema,
+} from '@/lib/listening-contracts';
 
 // JSON.parse → Zod 校验 → 有效分析或 null
 function parseAnalysis(
@@ -82,20 +85,53 @@ export async function GET() {
     }
 }
 
-
 export async function POST(request: Request) {
-    try {
-        const body = await request.json();
-        const { practiceId, answer } = body;
+    let body: unknown;
 
-        if (typeof practiceId !== 'string') {
+    try {
+        body = await request.json();
+    } catch {
+        return NextResponse.json(
+            { error: '请求必须包含有效的 JSON' },
+            { status: 400 }
+        );
+    }
+
+    const inputResult =
+        CreateListeningSessionInputSchema.safeParse(
+            body
+        );
+
+    if (!inputResult.success) {
+        return NextResponse.json(
+            {
+                error: 'Listening Session 输入无效',
+                details: inputResult.error.flatten(),
+            },
+            { status: 400 }
+        );
+    }
+
+    const input = inputResult.data;
+
+    let practiceId: string;
+    let practiceSnapshot: string | undefined;
+
+    if (input.practiceSnapshot) {
+        practiceId = 'custom';
+        practiceSnapshot = JSON.stringify(
+            input.practiceSnapshot
+        );
+    } else {
+        if (!input.practiceId) {
             return NextResponse.json(
-                { error: 'practiceId 必须是字符串' },
+                { error: 'practiceId 缺失' },
                 { status: 400 }
             );
         }
 
-        const practice = getListeningPractice(practiceId);
+        const practice =
+            getListeningPractice(input.practiceId);
 
         if (!practice) {
             return NextResponse.json(
@@ -104,26 +140,29 @@ export async function POST(request: Request) {
             );
         }
 
-        if (typeof answer !== 'string' || answer.trim() === '') {
-            return NextResponse.json(
-                { error: '请先输入你的英文总结' },
-                { status: 400 }
-            );
-        }
+        practiceId = input.practiceId;
+        practiceSnapshot = undefined;
+    }
 
-        const session = await prisma.listeningSession.create({
-            data: {
-                practiceId,
-                answer: answer.trim(),
-            },
-        });
+    try {
+        const session =
+            await prisma.listeningSession.create({
+                data: {
+                    practiceId,
+                    practiceSnapshot,
+                    answer: input.answer,
+                },
+            });
 
         return NextResponse.json(
             { session },
             { status: 201 }
         );
     } catch (error) {
-        console.error('Failed to create listening session:', error);
+        console.error(
+            'Failed to create listening session:',
+            error
+        );
 
         return NextResponse.json(
             { error: '保存 Listening Session 失败' },
