@@ -39,6 +39,34 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 数据库：
 terminal：  npx prisma studio
 
+## Listening Coach V2 — Custom Material MVP
+
+Listening Coach now supports a complete custom transcript-based practice flow:
+
+```text
+Custom source
+→ Structured generated practice
+→ Practice snapshot persistence
+→ User summary
+→ Existing AI feedback
+→ Saved custom session
+→ History
+```
+
+Custom material accepts a title, an optional source URL, a transcript, a B1/B1-B2/B2 difficulty, and one of four source types: `video`, `podcast`, `audio`, or `other`. AI generates a structured exercise with a main-idea question, detail questions, useful phrases, vocabulary, and a summary prompt. The completed practice reuses the existing Listening feedback and saved-session pipeline.
+
+The end-to-end MVP was manually verified with `A Simple Way to Break a Bad Habit | Judson Brewer | TED`. The saved custom Session and its feedback can be loaded by History. Custom title and difficulty are not yet resolved from the snapshot in the History UI, so custom entries currently use its generic metadata fallback.
+
+Current scope boundaries:
+
+- custom transcript-based material is supported;
+- external audio downloading is not implemented;
+- Article/Text-to-TTS is not implemented;
+- ASR and pronunciation scoring are not implemented;
+- reusable source and exercise libraries are not implemented.
+
+Architecture and verification details are documented in [Listening Coach V2 — Snapshot-Based Custom Practice](docs/listening-coach-v2-snapshot-based-custom-practice.md).
+
 ## Grounding Reliability V3
 
 ### Deterministically improved
@@ -64,4 +92,5 @@ Next reliability work should explore claim-level Grounding structure, semantic v
 ## Development Notes
 
 - [Reflection MVP — 2026-08-08](docs/dev-notes-2026-08-08.md)
+- [Listening Coach V2 — Snapshot-Based Custom Practice](docs/listening-coach-v2-snapshot-based-custom-practice.md)
 - [Grounding Reliability V3 — Evidence Validity Is Not Semantic Grounding](docs/grounding-reliability-v3-engineering-notes.md)
