@@ -31,6 +31,12 @@ export const ClaimEvidenceSchema = z.object({
     claimId: z.string().min(1),
     insightIndex: z.number().int().nonnegative(),
     kind: z.enum(['pattern', 'interpretation']),
+    scope: z
+        .enum([
+            'shared',
+            'source-specific',
+        ])
+        .optional(),
     claim: z.string().min(1),
     relationship: z.enum([
         'supports',
@@ -184,6 +190,7 @@ export function buildClaimVerificationInputs(
                 `insight-${insightIndex}-${kind}`,
             insightIndex,
             kind,
+            scope: 'shared' as const,
             claim,
             relationship: insight.relationship,
             evidenceRefs,

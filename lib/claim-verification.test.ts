@@ -52,6 +52,7 @@ describe('buildClaimVerificationInputs', () => {
             claimId: 'insight-2-pattern',
             insightIndex: 2,
             kind: 'pattern',
+            scope: 'shared',
             claim: insight.pattern,
             relationship: 'supports',
         });
@@ -65,6 +66,7 @@ describe('buildClaimVerificationInputs', () => {
             claimId: 'insight-2-interpretation',
             insightIndex: 2,
             kind: 'interpretation',
+            scope: 'shared',
             claim: insight.interpretation,
             relationship: 'supports',
         });
@@ -113,6 +115,45 @@ describe('buildClaimVerificationInputs', () => {
             ]);
         }
     });
+
+    it('preserves source-specific claim scope', () => {
+        const input = {
+            claim: {
+                claimId:
+                    'atomic-historical-location',
+                insightIndex: 0,
+                kind: 'interpretation',
+                scope: 'source-specific',
+                claim:
+                    'Historical Evidence 明确指出地点是星巴克。',
+                relationship: 'supports',
+                evidenceRefs: [
+                    {
+                        source: 'historical',
+                        reflectionId:
+                            'historical-location',
+                    },
+                ],
+            },
+            evidence: [
+                {
+                    source: 'historical',
+                    reflectionId:
+                        'historical-location',
+                    excerpt:
+                        '我在那里完成了 UI。',
+                },
+            ],
+        };
+
+        const parsed =
+            VerifyClaimInputSchema.parse(input);
+
+        expect(parsed.claim.scope).toBe(
+            'source-specific'
+        );
+    });
+
 });
 
 // 参数化测试会针对四个 fixture 分别确认：
