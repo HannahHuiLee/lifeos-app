@@ -37,6 +37,11 @@ import type {
   SupportResult,
 } from '@/lib/claim-verification';
 
+import {
+  buildAtomicClaimVerificationInput,
+  v3Case5AtomicClaimFixtures,
+} from '@/evals/fixtures/v3-case-5-atomic-claims';
+
 const SavedRunResponseSchema = z.object({
   analysis: z.object({
     result:
@@ -264,6 +269,118 @@ describe(
         expect(
           check.actualViolation !== null
         ).toBe(check.expectedViolation);
+      }
+    });
+
+    it('builds five atomic inputs with only their target evidence', () => {
+      expect(
+        v3Case5AtomicClaimFixtures
+      ).toHaveLength(5);
+
+      for (
+        const fixture of
+        v3Case5AtomicClaimFixtures
+      ) {
+        const runLabel =
+          v3Case5RunLabels.find(
+            ({ run }) =>
+              run === fixture.run
+          );
+
+        if (!runLabel) {
+          throw new Error(
+            `Run ${fixture.run} was not found`
+          );
+        }
+
+        const loadedRun =
+          loadSavedRun(runLabel);
+
+        const parent =
+          loadedRun.labeledClaims.find(
+            ({ input }) =>
+              input.claim.kind ===
+              fixture.parentKind
+          );
+
+        if (!parent) {
+          throw new Error(
+            `Parent claim for ${fixture.atomicClaimId} was not found`
+          );
+        }
+
+        const atomicInput =
+          buildAtomicClaimVerificationInput(
+            fixture,
+            parent.input
+          );
+
+        expect(() =>
+          VerifyClaimInputSchema.parse(
+            atomicInput
+          )
+        ).not.toThrow();
+
+        expect(atomicInput.claim).toMatchObject({
+          claimId:
+            fixture.atomicClaimId,
+          kind: fixture.parentKind,
+          scope: fixture.scope,
+          claim: fixture.claim,
+        });
+
+        const expectedKeys =
+          fixture.targetEvidenceRefs
+            .map(
+              ({ source, reflectionId }) =>
+                `${source}:${reflectionId}`
+            )
+            .sort();
+
+        const actualReferenceKeys =
+          atomicInput.claim.evidenceRefs
+            .map(
+              ({ source, reflectionId }) =>
+                `${source}:${reflectionId}`
+            )
+            .sort();
+
+        const actualEvidenceKeys =
+          atomicInput.evidence
+            .map(
+              ({ source, reflectionId }) =>
+                `${source}:${reflectionId}`
+            )
+            .sort();
+
+        expect(actualReferenceKeys).toEqual(
+          expectedKeys
+        );
+
+        expect(actualEvidenceKeys).toEqual(
+          expectedKeys
+        );
+
+        expect(atomicInput.evidence).toHaveLength(
+          fixture.targetEvidenceRefs.length
+        );
+
+        for (
+          const evidence of
+          atomicInput.evidence
+        ) {
+          const parentEvidence =
+            parent.input.evidence.find(
+              ({ source, reflectionId }) =>
+                source === evidence.source &&
+                reflectionId ===
+                evidence.reflectionId
+            );
+
+          expect(evidence.excerpt).toBe(
+            parentEvidence?.excerpt
+          );
+        }
       }
     });
 
@@ -528,6 +645,231 @@ function isStructuredOutputFailure(
     )
   );
 }
+
+type AtomicClaimEvaluation = {
+  run: string;
+  atomicClaimId: string;
+  parentKind:
+  'pattern' | 'interpretation';
+  scope:
+  'shared' | 'source-specific';
+  failureType: string;
+  expectedStatus:
+  SupportResult['status'];
+  status:
+  | SupportResult['status']
+  | 'error';
+  reason: string;
+  sourceAssessments:
+  | SupportResult['sourceAssessments']
+  | null;
+  durationMs: number;
+  failureKind:
+  | 'structured_output'
+  | 'other'
+  | null;
+};
+
+const runRealAtomicEvaluation =
+  process.env
+    .RUN_REAL_ATOMIC_VERIFIER_EVAL ===
+  'true';
+
+const describeRealAtomicEvaluation =
+  runRealAtomicEvaluation
+    ? describe
+    : describe.skip;
+
+describeRealAtomicEvaluation(
+  'real atomic claim verifier evaluation',
+  () => {
+    it(
+      'evaluates the five frozen semantic failures',
+      async () => {
+        const evaluations:
+          AtomicClaimEvaluation[] = [];
+
+        for (
+          const fixture of
+          v3Case5AtomicClaimFixtures
+        ) {
+          const runLabel =
+            v3Case5RunLabels.find(
+              ({ run }) =>
+                run === fixture.run
+            );
+
+          if (!runLabel) {
+            throw new Error(
+              `Run ${fixture.run} was not found`
+            );
+          }
+
+          const loadedRun =
+            loadSavedRun(runLabel);
+
+          const parent =
+            loadedRun.labeledClaims.find(
+              ({ input }) =>
+                input.claim.kind ===
+                fixture.parentKind
+            );
+
+          if (!parent) {
+            throw new Error(
+              `Parent claim for ` +
+              fixture.atomicClaimId +
+              ` was not found`
+            );
+          }
+
+          const input =
+            buildAtomicClaimVerificationInput(
+              fixture,
+              parent.input
+            );
+
+          const startedAt = Date.now();
+
+          try {
+            const result =
+              await verifyClaimSupport(
+                input
+              );
+
+            evaluations.push({
+              run: fixture.run,
+              atomicClaimId:
+                fixture.atomicClaimId,
+              parentKind:
+                fixture.parentKind,
+              scope: fixture.scope,
+              failureType:
+                fixture.failureType,
+              expectedStatus:
+                fixture.expectedStatus,
+              status: result.status,
+              reason: result.reason,
+              sourceAssessments:
+                result.sourceAssessments,
+              durationMs:
+                Date.now() - startedAt,
+              failureKind: null,
+            });
+          } catch (error) {
+            evaluations.push({
+              run: fixture.run,
+              atomicClaimId:
+                fixture.atomicClaimId,
+              parentKind:
+                fixture.parentKind,
+              scope: fixture.scope,
+              failureType:
+                fixture.failureType,
+              expectedStatus:
+                fixture.expectedStatus,
+              status: 'error',
+              reason:
+                error instanceof Error
+                  ? error.message
+                  : 'Unknown verifier error',
+              sourceAssessments: null,
+              durationMs:
+                Date.now() - startedAt,
+              failureKind:
+                isStructuredOutputFailure(
+                  error
+                )
+                  ? 'structured_output'
+                  : 'other',
+            });
+          }
+        }
+
+        const detectionMetrics =
+          calculateClaimDetectionMetrics(
+            evaluations
+          );
+
+        const metrics = {
+          ...detectionMetrics,
+
+          exactStatusMatches:
+            evaluations.filter(
+              ({
+                expectedStatus,
+                status,
+              }) =>
+                status === expectedStatus
+            ).length,
+
+          structuredOutputFailures:
+            evaluations.filter(
+              ({ failureKind }) =>
+                failureKind ===
+                'structured_output'
+            ).length,
+
+          otherCallFailures:
+            evaluations.filter(
+              ({ failureKind }) =>
+                failureKind === 'other'
+            ).length,
+
+          averageClaimDurationMs:
+            Math.round(
+              evaluations.reduce(
+                (total, result) =>
+                  total +
+                  result.durationMs,
+                0
+              ) /
+              evaluations.length
+            ),
+        };
+
+        console.info(
+          'Atomic verifier evaluations:\n' +
+          JSON.stringify(
+            evaluations,
+            null,
+            2
+          )
+        );
+
+        console.info(
+          'Atomic verifier metrics:\n' +
+          JSON.stringify(
+            metrics,
+            null,
+            2
+          )
+        );
+
+        expect(
+          metrics.totalClaims
+        ).toBe(5);
+
+        expect(
+          metrics.claimsNeedingDetection
+        ).toBe(5);
+
+        expect(
+          metrics.supportedClaims
+        ).toBe(0);
+
+        expect(
+          metrics.structuredOutputFailures
+        ).toBe(0);
+
+        expect(
+          metrics.otherCallFailures
+        ).toBe(0);
+      },
+      90_000
+    );
+  }
+);
 
 const runRealV3Evaluation =
   process.env.RUN_REAL_V3_VERIFIER_EVAL ===

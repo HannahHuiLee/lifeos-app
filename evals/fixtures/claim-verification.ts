@@ -49,6 +49,7 @@ function createSupportsInput({
       claimId,
       insightIndex: 0,
       kind: 'pattern',
+      scope: 'shared',
       claim,
       relationship: 'supports',
       evidenceRefs: evidence.map(
