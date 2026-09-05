@@ -272,9 +272,23 @@ describe(
       }
     });
 
-    it('builds five atomic inputs with only their target evidence', () => {
+    it('builds ten atomic inputs with only their target evidence', () => {
       expect(
         v3Case5AtomicClaimFixtures
+      ).toHaveLength(10);
+
+      expect(
+        v3Case5AtomicClaimFixtures.filter(
+          ({ expectedStatus }) =>
+            expectedStatus === 'unsupported'
+        )
+      ).toHaveLength(5);
+
+      expect(
+        v3Case5AtomicClaimFixtures.filter(
+          ({ expectedStatus }) =>
+            expectedStatus === 'supported'
+        )
       ).toHaveLength(5);
 
       for (
@@ -653,7 +667,7 @@ type AtomicClaimEvaluation = {
   'pattern' | 'interpretation';
   scope:
   'shared' | 'source-specific';
-  failureType: string;
+  failureType: string | null;
   expectedStatus:
   SupportResult['status'];
   status:
@@ -684,7 +698,7 @@ describeRealAtomicEvaluation(
   'real atomic claim verifier evaluation',
   () => {
     it(
-      'evaluates the five frozen semantic failures',
+      'evaluates five failures and five supported controls',
       async () => {
         const evaluations:
           AtomicClaimEvaluation[] = [];
@@ -848,7 +862,7 @@ describeRealAtomicEvaluation(
 
         expect(
           metrics.totalClaims
-        ).toBe(5);
+        ).toBe(10);
 
         expect(
           metrics.claimsNeedingDetection
@@ -856,7 +870,7 @@ describeRealAtomicEvaluation(
 
         expect(
           metrics.supportedClaims
-        ).toBe(0);
+        ).toBe(5);
 
         expect(
           metrics.structuredOutputFailures
@@ -866,7 +880,7 @@ describeRealAtomicEvaluation(
           metrics.otherCallFailures
         ).toBe(0);
       },
-      90_000
+      120_000
     );
   }
 );

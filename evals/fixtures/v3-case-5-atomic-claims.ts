@@ -149,6 +149,127 @@ export const v3Case5AtomicClaimFixtures:
             note:
                 'The cited excerpt says “我在那里” but does not identify Starbucks.',
         },
+
+        {
+            run: '04',
+            parentKind: 'interpretation',
+            atomicClaimId:
+                'run-04-all-historical-lifeos-control',
+            claim:
+                '两条被引用的 Historical Evidence 都明确提到用户在继续进行 LifeOS 项目。',
+            scope: 'shared',
+            targetEvidenceRefs: [
+                {
+                    source: 'historical',
+                    reflectionId:
+                        PRIMARY_HISTORICAL_ID,
+                },
+                {
+                    source: 'historical',
+                    reflectionId:
+                        SECONDARY_HISTORICAL_ID,
+                },
+            ],
+            expectedStatus: 'supported',
+            failureType: null,
+            note:
+                'Both cited Historical sources explicitly mention working on the LifeOS project.',
+        },
+        {
+            run: '07',
+            parentKind: 'pattern',
+            atomicClaimId:
+                'run-07-shared-lifeos-control',
+            claim:
+                'Current 与 Historical Evidence 都明确提到用户在继续开发 LifeOS。',
+            scope: 'shared',
+            targetEvidenceRefs: [
+                {
+                    source: 'current',
+                    reflectionId:
+                        CURRENT_REFLECTION_ID,
+                },
+                {
+                    source: 'historical',
+                    reflectionId:
+                        PRIMARY_HISTORICAL_ID,
+                },
+            ],
+            expectedStatus: 'supported',
+            failureType: null,
+            note:
+                'Both sources explicitly describe continuing work on LifeOS.',
+        },
+        {
+            run: '08',
+            parentKind: 'pattern',
+            atomicClaimId:
+                'run-08-shared-ui-control',
+            claim:
+                'Current 与 Historical Evidence 都明确提到 Evidence-backed Reflection 的 UI 工作。',
+            scope: 'shared',
+            targetEvidenceRefs: [
+                {
+                    source: 'current',
+                    reflectionId:
+                        CURRENT_REFLECTION_ID,
+                },
+                {
+                    source: 'historical',
+                    reflectionId:
+                        PRIMARY_HISTORICAL_ID,
+                },
+            ],
+            expectedStatus: 'supported',
+            failureType: null,
+            note:
+                'Current mentions fixing the UI and Historical mentions completing the UI.',
+        },
+        {
+            run: '09',
+            parentKind: 'pattern',
+            atomicClaimId:
+                'run-09-shared-ui-control',
+            claim:
+                'Current 与 Historical Evidence 都明确提到 Evidence-backed Reflection 的 UI 工作。',
+            scope: 'shared',
+            targetEvidenceRefs: [
+                {
+                    source: 'current',
+                    reflectionId:
+                        CURRENT_REFLECTION_ID,
+                },
+                {
+                    source: 'historical',
+                    reflectionId:
+                        PRIMARY_HISTORICAL_ID,
+                },
+            ],
+            expectedStatus: 'supported',
+            failureType: null,
+            note:
+                'The shortened Historical excerpt still mentions completing the UI, and Current mentions UI repair.',
+        },
+        {
+            run: '09',
+            parentKind: 'interpretation',
+            atomicClaimId:
+                'run-09-historical-ui-control',
+            claim:
+                '被引用的 Historical Evidence 明确指出用户完成了 Evidence-backed Reflection 的 UI。',
+            scope: 'source-specific',
+            targetEvidenceRefs: [
+                {
+                    source: 'historical',
+                    reflectionId:
+                        PRIMARY_HISTORICAL_ID,
+                },
+            ],
+            expectedStatus: 'supported',
+            failureType: null,
+            note:
+                'The cited Historical excerpt explicitly says the Evidence-backed Reflection UI was completed.',
+        },
     ];
 
 function createEvidenceKey(
@@ -263,6 +384,8 @@ export type V3Case5AtomicClaimFixture = {
     readonly AtomicEvidenceReference[];
     expectedStatus:
     SupportResult['status'];
-    failureType: SemanticFailureType;
+    failureType:
+    | SemanticFailureType
+    | null;
     note: string;
 };
