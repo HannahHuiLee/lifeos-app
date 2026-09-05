@@ -56,6 +56,88 @@ export type VerifyClaimInput = z.infer<
     typeof VerifyClaimInputSchema
 >;
 
+
+export type HistoricalCardinalityViolation = {
+    failureType: 'quantity/cardinality';
+    matchedTerm: string;
+    historicalSourceCount: number;
+    requiredHistoricalSourceCount: 2;
+};
+
+const HISTORICAL_CARDINALITY_RULES = [
+    {
+        term: '多次',
+        pattern:
+            /(?:历史[^。！？.!?\n]{0,40}多次|多次[^。！？.!?\n]{0,40}历史)/u,
+    },
+    {
+        term: '多条',
+        pattern:
+            /(?:历史[^。！？.!?\n]{0,40}多条|多条[^。！？.!?\n]{0,40}历史)/u,
+    },
+    {
+        term: '反复',
+        pattern:
+            /(?:历史[^。！？.!?\n]{0,40}反复|反复[^。！？.!?\n]{0,40}历史)/u,
+    },
+    {
+        term: 'multiple',
+        pattern:
+            /(?:\b(?:history|historical)\b[^.!?\n]{0,80}\bmultiple\b|\bmultiple\b[^.!?\n]{0,80}\b(?:history|historical)\b)/iu,
+    },
+    {
+        term: 'repeatedly',
+        pattern:
+            /(?:\b(?:history|historical)\b[^.!?\n]{0,80}\brepeatedly\b|\brepeatedly\b[^.!?\n]{0,80}\b(?:history|historical)\b)/iu,
+    },
+    {
+        term: 'often',
+        pattern:
+            /(?:\b(?:history|historical)\b[^.!?\n]{0,80}\boften\b|\boften\b[^.!?\n]{0,80}\b(?:history|historical)\b)/iu,
+    },
+] as const;
+
+// 它只在两个条件同时成立时报警：
+// 1. claim 明确把频率/数量描述与 Historical 联系起来；
+// 2. cited unique Historical IDs 少于两个。
+export function findHistoricalCardinalityViolation(
+    input: VerifyClaimInput
+): HistoricalCardinalityViolation | null {
+    const historicalSourceCount =
+        new Set(
+            input.claim.evidenceRefs
+                .filter(
+                    ({ source }) =>
+                        source === 'historical'
+                )
+                .map(
+                    ({ reflectionId }) =>
+                        reflectionId
+                )
+        ).size;
+
+    if (historicalSourceCount >= 2) {
+        return null;
+    }
+
+    const matchedRule =
+        HISTORICAL_CARDINALITY_RULES.find(
+            ({ pattern }) =>
+                pattern.test(input.claim.claim)
+        );
+
+    if (!matchedRule) {
+        return null;
+    }
+
+    return {
+        failureType: 'quantity/cardinality',
+        matchedTerm: matchedRule.term,
+        historicalSourceCount,
+        requiredHistoricalSourceCount: 2,
+    };
+}
+
 // evidence 首先放 Current，再保留 Historical Evidence 的原顺序。
 // as const 防止 TypeScript 把 'historical'、'pattern' 推断成宽泛的 string。
 // evidenceRefs 只保留来源标签和 ID，作为 claim 声称使用的引用。
@@ -110,6 +192,26 @@ export function buildClaimVerificationInputs(
     }));
 }
 
+export const SourceSupportAssessmentSchema =
+    z.object({
+        source: z.enum([
+            'current',
+            'historical',
+        ]),
+        reflectionId: z.string().min(1),
+        support: z.enum([
+            'full',
+            'partial',
+            'none',
+        ]),
+        reason: z.string().min(1),
+    });
+
+export type SourceSupportAssessment =
+    z.infer<
+        typeof SourceSupportAssessmentSchema
+    >;
+
 export const SupportResultSchema = z.object({
     claimId: z.string().min(1),
     status: z.enum([
@@ -118,8 +220,77 @@ export const SupportResultSchema = z.object({
         'unsupported',
     ]),
     reason: z.string().min(1),
+    sourceAssessments: z
+        .array(SourceSupportAssessmentSchema)
+        .min(1),
 });
 
 export type SupportResult = z.infer<
     typeof SupportResultSchema
 >;
+
+type SourceIdentity = {
+    source: 'current' | 'historical';
+    reflectionId: string;
+};
+
+function createSourceIdentityKey(
+    identity: SourceIdentity
+): string {
+    return (
+        `${identity.source}:` +
+        identity.reflectionId
+    );
+}
+
+// - hasDuplicateAssessments：同一来源重复出现；
+// - hasDifferentLength：缺少来源或添加来源；
+// - hasDifferentSource：ID 或 source 标签不匹配。
+// 对 expected keys 使用 Set，因为相同 source + reflectionId 表示同一个独立来源。即使输入意外包含同一 ID 的多个 excerpts，也不要求模型重复评估同一个来源。
+// 排序只用于让集合比较不依赖模型输出顺序。模型可以先返回 Historical，再返回 Current，只要集合完全相同即可。
+
+export function assertSourceAssessmentCoverage(
+    input: VerifyClaimInput,
+    result: SupportResult
+): void {
+    const expectedKeys = [
+        ...new Set(
+            input.claim.evidenceRefs.map(
+                createSourceIdentityKey
+            )
+        ),
+    ].sort();
+
+    const actualKeys =
+        result.sourceAssessments
+            .map(createSourceIdentityKey)
+            .sort();
+
+    const uniqueActualKeys =
+        new Set(actualKeys);
+
+    const hasDuplicateAssessments =
+        uniqueActualKeys.size !==
+        actualKeys.length;
+
+    const hasDifferentLength =
+        expectedKeys.length !==
+        actualKeys.length;
+
+    const hasDifferentSource =
+        expectedKeys.some(
+            (expectedKey, index) =>
+                expectedKey !== actualKeys[index]
+        );
+
+    if (
+        hasDuplicateAssessments ||
+        hasDifferentLength ||
+        hasDifferentSource
+    ) {
+        throw new Error(
+            'Verifier source assessments do not ' +
+            'exactly match cited evidence'
+        );
+    }
+}

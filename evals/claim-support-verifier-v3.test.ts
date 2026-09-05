@@ -25,6 +25,7 @@ import {
 
 import {
   buildClaimVerificationInputs,
+  findHistoricalCardinalityViolation,
   VerifyClaimInputSchema,
 } from '@/lib/claim-verification';
 
@@ -71,9 +72,31 @@ function loadSavedRun(
         )
     );
 
+  const labeledClaims =
+    claims.map((input, claimIndex) => {
+      const groundTruth =
+        label.claimLabels[claimIndex];
+
+      if (
+        !groundTruth ||
+        input.claim.kind !== groundTruth.kind
+      ) {
+        throw new Error(
+          `Claim label mismatch in run ${label.run} ` +
+          `at index ${claimIndex}`
+        );
+      }
+
+      return {
+        input,
+        groundTruth,
+      };
+    });
+
   return {
     ...label,
     claims,
+    labeledClaims,
   };
 }
 
@@ -98,6 +121,35 @@ describe(
       ).toHaveLength(2);
     });
 
+    // 它防止：
+    // - 某个 run 漏掉 Pattern 或 Interpretation；
+    // - 同一个 kind 被重复标注；
+    // - 标签顺序和 buildClaimVerificationInputs 输出顺序不一致；
+    // - 我们误以为已经完成 20 条标注，实际数量不足。
+    it('loads claim-level ground truth for all twenty claims', () => {
+      const allClaimLabels =
+        v3Case5RunLabels.flatMap((run) => {
+          const claimLabels =
+            'claimLabels' in run &&
+              Array.isArray(run.claimLabels)
+              ? run.claimLabels
+              : [];
+
+          expect(claimLabels).toHaveLength(2);
+
+          expect(
+            claimLabels.map(({ kind }) => kind)
+          ).toEqual([
+            'pattern',
+            'interpretation',
+          ]);
+
+          return claimLabels;
+        });
+
+      expect(allClaimLabels).toHaveLength(20);
+    });
+
     it('extracts twenty valid claim inputs', () => {
       const loadedRuns =
         v3Case5RunLabels.map(loadSavedRun);
@@ -118,6 +170,103 @@ describe(
         }
       }
     });
+
+    it('pairs every claim with matching ground truth', () => {
+      const loadedRuns =
+        v3Case5RunLabels.map(loadSavedRun);
+
+      expect(
+        loadedRuns.flatMap(
+          ({ labeledClaims }) =>
+            labeledClaims
+        )
+      ).toHaveLength(20);
+
+      for (const run of loadedRuns) {
+        for (
+          const {
+            input,
+            groundTruth,
+          } of run.labeledClaims
+        ) {
+          expect(input.claim.kind).toBe(
+            groundTruth.kind
+          );
+        }
+
+        const derivedHumanLabel =
+          run.labeledClaims.some(
+            ({ groundTruth }) =>
+              groundTruth.expectedStatus !==
+              'supported'
+          )
+            ? 'needs_detection'
+            : 'supported';
+
+        expect(derivedHumanLabel).toBe(
+          run.humanLabel
+        );
+      }
+    });
+
+    it('detects the five frozen historical cardinality failures', () => {
+      const checks =
+        v3Case5RunLabels.flatMap(
+          (label) => {
+            const run = loadSavedRun(label);
+
+            return run.labeledClaims.map(
+              ({ input, groundTruth }) => ({
+                key:
+                  `${run.run}-${input.claim.kind}`,
+                expectedViolation:
+                  groundTruth.failureTypes.includes(
+                    'quantity/cardinality'
+                  ),
+                actualViolation:
+                  findHistoricalCardinalityViolation(
+                    input
+                  ),
+              })
+            );
+          }
+        );
+
+      const expectedKeys =
+        checks
+          .filter(
+            ({ expectedViolation }) =>
+              expectedViolation
+          )
+          .map(({ key }) => key);
+
+      const detectedKeys =
+        checks
+          .filter(
+            ({ actualViolation }) =>
+              actualViolation !== null
+          )
+          .map(({ key }) => key);
+
+      expect(expectedKeys).toEqual([
+        '01-pattern',
+        '02-interpretation',
+        '03-interpretation',
+        '06-interpretation',
+        '08-interpretation',
+      ]);
+
+      expect(detectedKeys).toEqual(
+        expectedKeys
+      );
+
+      for (const check of checks) {
+        expect(
+          check.actualViolation !== null
+        ).toBe(check.expectedViolation);
+      }
+    });
+
   }
 );
 
@@ -129,19 +278,231 @@ describe(
 // unclassifiedRuns：至少一个 verifier 调用失败。
 // structuredOutputFailures：Zod、无结构结果或 claim ID 错误。
 // otherCallFailures：配置、网络、限流等失败。
-
 type ClaimEvaluation = {
   claimId: string;
+  kind: 'pattern' | 'interpretation';
+  expectedStatus:
+  SupportResult['status'];
+  failureTypes: readonly string[];
+  humanNote: string;
+  deterministicViolation:
+  ReturnType<
+    typeof findHistoricalCardinalityViolation
+  >;
   status:
   | SupportResult['status']
   | 'error';
   reason: string;
+  sourceAssessments:
+  | SupportResult['sourceAssessments']
+  | null;
   durationMs: number;
   failureKind:
   | 'structured_output'
   | 'other'
   | null;
 };
+
+
+// (human expectedStatus) vs (verifier actual status)
+type ClaimClassification = Pick<
+  ClaimEvaluation,
+  'expectedStatus' | 'status'
+>;
+
+type ClaimSignalClassification = {
+  expectedStatus:
+  SupportResult['status'];
+  semanticStatus:
+  | SupportResult['status']
+  | 'error';
+  deterministicDetected: boolean;
+};
+
+function calculateClaimDetectionMetrics(
+  results: ClaimClassification[]
+) {
+  const needsDetection = (
+    status: SupportResult['status']
+  ) => status !== 'supported';
+
+  const wasDetected = (
+    status: ClaimEvaluation['status']
+  ) =>
+    status === 'partial' ||
+    status === 'unsupported';
+
+  return {
+    totalClaims: results.length,
+
+    claimsNeedingDetection:
+      results.filter(
+        ({ expectedStatus }) =>
+          needsDetection(expectedStatus)
+      ).length,
+
+    supportedClaims:
+      results.filter(
+        ({ expectedStatus }) =>
+          expectedStatus === 'supported'
+      ).length,
+
+    unsupportedOrPartialCorrectlyDetected:
+      results.filter(
+        ({ expectedStatus, status }) =>
+          needsDetection(expectedStatus) &&
+          wasDetected(status)
+      ).length,
+
+    supportedCorrectlyClassified:
+      results.filter(
+        ({ expectedStatus, status }) =>
+          expectedStatus === 'supported' &&
+          status === 'supported'
+      ).length,
+
+    falsePositives:
+      results.filter(
+        ({ expectedStatus, status }) =>
+          expectedStatus === 'supported' &&
+          wasDetected(status)
+      ).length,
+
+    falseNegatives:
+      results.filter(
+        ({ expectedStatus, status }) =>
+          needsDetection(expectedStatus) &&
+          status === 'supported'
+      ).length,
+
+    unclassifiedClaims:
+      results.filter(
+        ({ status }) =>
+          status === 'error'
+      ).length,
+  };
+}
+
+function calculateClaimSignalMetrics(
+  results: ClaimSignalClassification[]
+) {
+  type DetectionSignal = {
+    detected: boolean;
+    unclassified: boolean;
+  };
+
+  const summarize = (
+    getSignal: (
+      result: ClaimSignalClassification
+    ) => DetectionSignal
+  ) => ({
+    correctlyDetected:
+      results.filter((result) => {
+        const signal = getSignal(result);
+
+        return (
+          result.expectedStatus !==
+          'supported' &&
+          signal.detected
+        );
+      }).length,
+
+    correctlyNotDetected:
+      results.filter((result) => {
+        const signal = getSignal(result);
+
+        return (
+          result.expectedStatus ===
+          'supported' &&
+          !signal.detected &&
+          !signal.unclassified
+        );
+      }).length,
+
+    falsePositives:
+      results.filter((result) => {
+        const signal = getSignal(result);
+
+        return (
+          result.expectedStatus ===
+          'supported' &&
+          signal.detected
+        );
+      }).length,
+
+    falseNegatives:
+      results.filter((result) => {
+        const signal = getSignal(result);
+
+        return (
+          result.expectedStatus !==
+          'supported' &&
+          !signal.detected &&
+          !signal.unclassified
+        );
+      }).length,
+
+    unclassified:
+      results.filter(
+        (result) =>
+          getSignal(result).unclassified
+      ).length,
+  });
+
+  const semanticSignal = (
+    result: ClaimSignalClassification
+  ): DetectionSignal => ({
+    detected:
+      result.semanticStatus ===
+      'partial' ||
+      result.semanticStatus ===
+      'unsupported',
+    unclassified:
+      result.semanticStatus === 'error',
+  });
+
+  return {
+    totalClaims: results.length,
+
+    claimsNeedingDetection:
+      results.filter(
+        ({ expectedStatus }) =>
+          expectedStatus !== 'supported'
+      ).length,
+
+    supportedClaims:
+      results.filter(
+        ({ expectedStatus }) =>
+          expectedStatus === 'supported'
+      ).length,
+
+    deterministic: summarize(
+      ({ deterministicDetected }) => ({
+        detected:
+          deterministicDetected,
+        unclassified: false,
+      })
+    ),
+
+    semantic: summarize(
+      semanticSignal
+    ),
+
+    combined: summarize((result) => {
+      const semantic =
+        semanticSignal(result);
+
+      return {
+        detected:
+          result.deterministicDetected ||
+          semantic.detected,
+        unclassified:
+          semantic.unclassified &&
+          !result.deterministicDetected,
+      };
+    }),
+  };
+}
 
 type VerifierRunLabel =
   | 'supported'
@@ -161,13 +522,138 @@ function isStructuredOutputFailure(
 
   return (
     error.message.includes('结构化') ||
-    error.message.includes('claimId')
+    error.message.includes('claimId') ||
+    error.message.includes(
+      'source assessments'
+    )
   );
 }
 
 const runRealV3Evaluation =
   process.env.RUN_REAL_V3_VERIFIER_EVAL ===
   'true';
+
+describe(
+  'claim-level detection metrics',
+  () => {
+    it('classifies TP, TN, FP, FN, and errors', () => {
+      const results:
+        ClaimClassification[] = [
+          {
+            expectedStatus: 'partial',
+            status: 'partial',
+          },
+          {
+            expectedStatus: 'unsupported',
+            status: 'partial',
+          },
+          {
+            expectedStatus: 'supported',
+            status: 'supported',
+          },
+          {
+            expectedStatus: 'supported',
+            status: 'partial',
+          },
+          {
+            expectedStatus: 'partial',
+            status: 'supported',
+          },
+          {
+            expectedStatus: 'partial',
+            status: 'error',
+          },
+        ];
+
+      expect(
+        calculateClaimDetectionMetrics(
+          results
+        )
+      ).toEqual({
+        totalClaims: 6,
+        claimsNeedingDetection: 4,
+        supportedClaims: 2,
+        unsupportedOrPartialCorrectlyDetected: 2,
+        supportedCorrectlyClassified: 1,
+        falsePositives: 1,
+        falseNegatives: 1,
+        unclassifiedClaims: 1,
+      });
+    });
+  }
+);
+
+describe(
+  'claim detection signals',
+  () => {
+    it('keeps deterministic, semantic, and combined metrics separate', () => {
+      const results:
+        ClaimSignalClassification[] = [
+          {
+            expectedStatus: 'partial',
+            semanticStatus: 'supported',
+            deterministicDetected: true,
+          },
+          {
+            expectedStatus: 'partial',
+            semanticStatus: 'partial',
+            deterministicDetected: false,
+          },
+          {
+            expectedStatus: 'supported',
+            semanticStatus: 'partial',
+            deterministicDetected: false,
+          },
+          {
+            expectedStatus: 'supported',
+            semanticStatus: 'supported',
+            deterministicDetected: false,
+          },
+          {
+            expectedStatus: 'partial',
+            semanticStatus: 'error',
+            deterministicDetected: true,
+          },
+          {
+            expectedStatus: 'supported',
+            semanticStatus: 'error',
+            deterministicDetected: false,
+          },
+        ];
+
+      expect(
+        calculateClaimSignalMetrics(
+          results
+        )
+      ).toEqual({
+        totalClaims: 6,
+        claimsNeedingDetection: 3,
+        supportedClaims: 3,
+        deterministic: {
+          correctlyDetected: 2,
+          correctlyNotDetected: 3,
+          falsePositives: 0,
+          falseNegatives: 1,
+          unclassified: 0,
+        },
+        semantic: {
+          correctlyDetected: 1,
+          correctlyNotDetected: 1,
+          falsePositives: 1,
+          falseNegatives: 1,
+          unclassified: 2,
+        },
+        combined: {
+          correctlyDetected: 3,
+          correctlyNotDetected: 1,
+          falsePositives: 1,
+          falseNegatives: 0,
+          unclassified: 1,
+        },
+      });
+    });
+  }
+);
 
 const describeRealV3Evaluation =
   runRealV3Evaluation
@@ -178,7 +664,7 @@ describeRealV3Evaluation(
   'real V3 Case 5 verifier evaluation',
   () => {
     it(
-      'calculates run-level detection metrics',
+      'calculates run-level and claim-level detection metrics',
       async () => {
         const loadedRuns =
           v3Case5RunLabels.map(loadSavedRun);
@@ -189,17 +675,34 @@ describeRealV3Evaluation(
           const claimResults:
             ClaimEvaluation[] = [];
 
-          for (const input of run.claims) {
+          for (
+            const {
+              input,
+              groundTruth,
+            } of run.labeledClaims
+          ) {
+            const deterministicViolation =
+              findHistoricalCardinalityViolation(
+                input
+              );
             const startedAt = Date.now();
 
             try {
               const result =
                 await verifyClaimSupport(input);
-
               claimResults.push({
                 claimId: result.claimId,
+                kind: input.claim.kind,
+                expectedStatus:
+                  groundTruth.expectedStatus,
+                failureTypes:
+                  groundTruth.failureTypes,
+                humanNote: groundTruth.note,
+                deterministicViolation,
                 status: result.status,
                 reason: result.reason,
+                sourceAssessments:
+                  result.sourceAssessments,
                 durationMs:
                   Date.now() - startedAt,
                 failureKind: null,
@@ -208,11 +711,19 @@ describeRealV3Evaluation(
               claimResults.push({
                 claimId:
                   input.claim.claimId,
+                kind: input.claim.kind,
+                expectedStatus:
+                  groundTruth.expectedStatus,
+                failureTypes:
+                  groundTruth.failureTypes,
+                humanNote: groundTruth.note,
+                deterministicViolation,
                 status: 'error',
                 reason:
                   error instanceof Error
                     ? error.message
                     : 'Unknown verifier error',
+                sourceAssessments: null,
                 durationMs:
                   Date.now() - startedAt,
                 failureKind:
@@ -254,6 +765,27 @@ describeRealV3Evaluation(
           evaluations.flatMap(
             ({ claimResults }) =>
               claimResults
+          );
+
+        const claimMetrics =
+          calculateClaimDetectionMetrics(
+            allClaimResults
+          );
+
+        const signalMetrics =
+          calculateClaimSignalMetrics(
+            allClaimResults.map(
+              ({
+                expectedStatus,
+                status,
+                deterministicViolation,
+              }) => ({
+                expectedStatus,
+                semanticStatus: status,
+                deterministicDetected:
+                  deterministicViolation !== null,
+              })
+            )
           );
 
         const metrics = {
@@ -347,6 +879,25 @@ describeRealV3Evaluation(
           )
         );
 
+        console.info(
+          'V3 verifier claim metrics:\n' +
+          JSON.stringify(
+            claimMetrics,
+            null,
+            2
+          )
+        );
+
+        //这里的 V3 指冻结的 Grounding Reliability V3 Case 5 inputs。Verifier 本身已经是加入 per-source assessments 后的新迭代。
+        console.info(
+          'V3 verifier signal metrics:\n' +
+          JSON.stringify(
+            signalMetrics,
+            null,
+            2
+          )
+        );
+
         expect(metrics.totalClaimCalls).toBe(
           20
         );
@@ -358,6 +909,42 @@ describeRealV3Evaluation(
         expect(
           metrics.otherCallFailures
         ).toBe(0);
+
+        expect(
+          claimMetrics.totalClaims
+        ).toBe(20);
+
+        expect(
+          claimMetrics.claimsNeedingDetection
+        ).toBe(10);
+
+        expect(
+          claimMetrics.supportedClaims
+        ).toBe(10);
+
+        //冻结 Deterministic Baseline
+        expect(
+          signalMetrics.totalClaims
+        ).toBe(20);
+
+        expect(
+          signalMetrics.claimsNeedingDetection
+        ).toBe(10);
+
+        expect(
+          signalMetrics.supportedClaims
+        ).toBe(10);
+
+        expect(
+          signalMetrics.deterministic
+        ).toEqual({
+          correctlyDetected: 5,
+          correctlyNotDetected: 10,
+          falsePositives: 0,
+          falseNegatives: 5,
+          unclassified: 0,
+        });
+
       },
       180_000
     );

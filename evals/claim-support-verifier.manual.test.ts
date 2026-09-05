@@ -1,15 +1,15 @@
 import {
-  describe,
-  expect,
-  it,
+    describe,
+    expect,
+    it,
 } from 'vitest';
 
 import {
-  claimVerificationFixtures,
+    claimVerificationFixtures,
 } from '@/evals/fixtures/claim-verification';
 
 import {
-  verifyClaimSupport,
+    verifyClaimSupport,
 } from '@/lib/claim-support-verifier';
 
 
@@ -23,57 +23,80 @@ import {
 // 如果实际状态不是 unsupported，测试仍可能通过，但我们必须把它记录为 Verifier 语义错误。
 
 const runRealVerifier =
-  process.env.RUN_REAL_CLAIM_VERIFIER ===
-  'true';
+    process.env.RUN_REAL_CLAIM_VERIFIER ===
+    'true';
 
 const describeRealVerifier =
-  runRealVerifier ? describe : describe.skip;
+    runRealVerifier ? describe : describe.skip;
 
 describeRealVerifier(
-  'real claim support verifier',
-  () => {
-    it(
-      'checks the frozen Case 5 attribution',
-      async () => {
-        const fixture =
-          claimVerificationFixtures.find(
-            ({ name }) =>
-              name ===
-              'unsupported Case 5 attribution'
-          );
+    'real claim support verifier',
+    () => {
+        it(
+            'checks the frozen Case 5 attribution',
+            async () => {
+                const fixture =
+                    claimVerificationFixtures.find(
+                        ({ name }) =>
+                            name ===
+                            'unsupported Case 5 attribution'
+                    );
 
-        if (!fixture) {
-          throw new Error(
-            'Case 5 fixture was not found'
-          );
-        }
+                if (!fixture) {
+                    throw new Error(
+                        'Case 5 fixture was not found'
+                    );
+                }
 
-        const startedAt = Date.now();
+                const startedAt = Date.now();
 
-        const result = await verifyClaimSupport(
-          fixture.input
+                const result = await verifyClaimSupport(
+                    fixture.input
+                );
+
+                const durationMs =
+                    Date.now() - startedAt;
+
+                console.info(
+                    'Claim verifier manual result:',
+                    {
+                        fixture: fixture.name,
+                        expectedStatus:
+                            fixture.expectedStatus,
+                        actualStatus: result.status,
+                        reason: result.reason,
+                        sourceAssessments:
+                            result.sourceAssessments,
+                        durationMs,
+                    }
+                );
+
+                expect(result.claimId).toBe(
+                    fixture.input.claim.claimId
+                );
+
+                const expectedSourceKeys =
+                    fixture.input.evidence
+                        .map(
+                            ({ source, reflectionId }) =>
+                                `${source}:${reflectionId}`
+                        )
+                        .sort();
+
+                const actualSourceKeys =
+                    result.sourceAssessments
+                        .map(
+                            ({ source, reflectionId }) =>
+                                `${source}:${reflectionId}`
+                        )
+                        .sort();
+
+                expect(actualSourceKeys).toEqual(
+                    expectedSourceKeys
+                );
+
+            },
+            30_000
         );
-
-        const durationMs =
-          Date.now() - startedAt;
-
-        console.info(
-          'Claim verifier manual result:',
-          {
-            fixture: fixture.name,
-            expectedStatus:
-              fixture.expectedStatus,
-            actualStatus: result.status,
-            reason: result.reason,
-            durationMs,
-          }
-        );
-
-        expect(result.claimId).toBe(
-          fixture.input.claim.claimId
-        );
-      },
-      30_000
-    );
-  }
+    }
 );
