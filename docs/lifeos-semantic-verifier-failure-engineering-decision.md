@@ -218,3 +218,392 @@ After V2 is re-evaluated on the same frozen inputs and provides reliable enough 
 3. Prompt instructions are not deterministic enforcement.
 4. Facts already known by the application should be enforced in deterministic code.
 5. AI reliability changes should be measured on frozen regression sets before affecting user-visible output.
+
+---
+
+## 12. Step 5D Progress Record
+
+> Updated: 2026-09-05  
+> Scope: evaluation and verifier reliability only; no Route integration, output blocking, or repair/regeneration.
+
+Step 5D was started because the original run-level evaluation was too coarse. A run contained two claims—Pattern and Interpretation—but the original ground truth only said whether the whole run was `supported` or `needs_detection`. If the Verifier flagged the wrong claim inside a failing run, the run-level metric could still count it as a successful detection.
+
+The work completed so far:
+
+1. Defined a claim-level human-label contract.
+2. Added labels for all 20 frozen Pattern/Interpretation claims.
+3. Paired every extracted claim with its human ground truth and checked the claim kind.
+4. Added pure functions for claim-level and multi-signal metrics.
+5. Added a deterministic Historical quantity/cardinality pre-check.
+6. Added per-source semantic assessments to the Verifier output contract.
+7. Added deterministic source-coverage validation.
+8. Updated the Verifier prompt with per-source assessment rules.
+9. Ran a single manual Case-5-style check.
+10. Re-ran the complete 20-call evaluation on the same frozen inputs.
+
+The frozen claim-level ground truth contains:
+
+| Human status | Claims |
+|---|---:|
+| `supported` | 10 |
+| `partial` | 10 |
+| `unsupported` | 0 |
+| **Total** | **20** |
+
+No frozen claim was labeled `unsupported` because each failing generated claim still had a supported core LifeOS/project-continuity relationship. Its error was an unsupported quantity, attribution, environment, mental state, or source-coverage detail. The separate synthetic Case-5 fixture still covers a genuinely `unsupported` core relationship.
+
+## 13. Step 5D Engineering Process
+
+### 13.1 Move from run-level to claim-level ground truth
+
+Each of the 10 frozen runs contains one Insight, and each Insight produces two verification inputs:
+
+```text
+10 frozen runs
+× 2 claims per Insight
+= 20 claim-level examples
+```
+
+Each human label records:
+
+- `kind`: Pattern or Interpretation;
+- `expectedStatus`: `supported`, `partial`, or `unsupported`;
+- `failureTypes`: one or more known failure categories;
+- `note`: the human evidence-based reason for the label.
+
+The human note is kept separate from the Verifier `reason`. Model-generated explanations cannot define their own ground truth.
+
+Every extracted claim is explicitly paired with its label. Tests verify that each run has exactly two labels in Pattern/Interpretation order and that the claim kinds match. The claim-level labels must also reconstruct the original run-level label: if either claim is `partial` or `unsupported`, the run is `needs_detection`.
+
+### 13.2 Classify the known failure types
+
+The 10 problematic claims use five failure tags:
+
+| Failure type | Tagged claims | What the error means |
+|---|---:|---|
+| `quantity/cardinality` | 5 | The claim says historical evidence occurred multiple times or exists in multiple records, but cites too few independent Historical IDs. |
+| `historical-only attribution` | 3 | An attribute found only in Historical evidence is presented as shared by Current and Historical evidence. |
+| `unsupported environment` | 2 | The claim introduces or shares a location/environment not present in the source to which it is attributed. |
+| `unsupported mental state` | 2 | Focus or another internal state is attributed to a source that does not explicitly support it. |
+| `not-all-cited-sources-support` | 1 | The claim says multiple cited sources support a detail, although at least one cited source does not. |
+
+Some claims have more than one tag, so the tagged counts sum to more than 10.
+
+### 13.3 Build a deterministic cardinality pre-check
+
+The application already has the cited `source` and `reflectionId` values, so it can count unique Historical sources without an LLM.
+
+The pre-check:
+
+1. detects explicit Historical quantity/frequency wording such as `多次`, `多条`, `反复`, `multiple`, `repeatedly`, or `often`;
+2. counts unique cited Historical `reflectionId` values with a `Set`;
+3. returns a structured `quantity/cardinality` violation when fewer than two independent Historical sources are cited;
+4. returns `null` when this specific deterministic violation is not found.
+
+Two different excerpts with the same `reflectionId` still count as one source. Passing this pre-check does **not** mean the claim is semantically supported; it only means this known cardinality violation was not detected.
+
+On the 20 frozen claims, this rule produced:
+
+| Cardinality pre-check result | Count |
+|---|---:|
+| Correctly detected cardinality failures | 5/5 |
+| False positives | 0 |
+
+This converted one unreliable prompt instruction into deterministic application behavior.
+
+### 13.4 Add per-source semantic assessments
+
+The original Verifier returned only:
+
+```ts
+{
+  claimId,
+  status,
+  reason,
+}
+```
+
+The revised contract also requires one assessment for every cited source:
+
+```ts
+{
+  source,
+  reflectionId,
+  support: "full" | "partial" | "none",
+  reason,
+}
+```
+
+The source-level assessment asks whether a source supports the portion of the claim attributed to that source. It prevents all evidence from being hidden behind one global explanation and makes source-specific mistakes observable.
+
+Application code then checks that the result contains every unique cited `source + reflectionId` exactly once. It rejects:
+
+- a missing source;
+- a duplicated source;
+- a fabricated Reflection ID;
+- a correct ID with the wrong Current/Historical label.
+
+This validation proves that the model assessed the correct source set. It does not prove that `full`, `partial`, `none`, or the reason is semantically correct.
+
+### 13.5 Keep three detection signals separate
+
+The evaluation now reports:
+
+```text
+Deterministic signal
+= application-known rule violation
+
+Semantic signal
+= LLM returns partial or unsupported
+
+Combined signal
+= deterministic OR semantic detection
+```
+
+The system does not convert a deterministic violation into a fake LLM `partial` result. The signals remain separate so their contribution can be measured.
+
+If the LLM call fails but the deterministic rule already finds a violation, Combined can still report that a problem was detected. If neither signal produces a result, the claim remains unclassified rather than being counted as supported.
+
+## 14. Step 5D Evaluation Results
+
+### 14.1 Single manual Case-5-style check
+
+The manually selected synthetic claim said Current and Historical evidence both showed working with focus at Starbucks for three hours. Only the Historical evidence supported those attributes.
+
+Actual result:
+
+| Field | Result |
+|---|---|
+| Expected status | `unsupported` |
+| Actual status | `unsupported` |
+| Current assessment | `none` |
+| Historical assessment | `full` |
+| Source coverage | Passed |
+| Duration | 4426 ms |
+
+The Current reason correctly said Starbucks and focused work duration were absent. The Historical reason correctly identified the Starbucks and three-hour focus evidence. This proved that the new contract could work for one example, not that it was reliable across the full set.
+
+### 14.2 Full 20-call evaluation after Step 5D changes
+
+The same 10 frozen Case 5 runs and 20 claims were evaluated again.
+
+#### Run-level metrics
+
+| Metric | Result |
+|---|---:|
+| Correctly detected failing runs | 3/8 |
+| Correctly classified supported runs | 2/2 |
+| False positives | 0 |
+| False negatives | 5 |
+| Detection recall | 37.5% |
+| False-negative rate | 62.5% |
+
+#### Semantic claim-level metrics
+
+| Metric | Result |
+|---|---:|
+| Claims needing detection | 10 |
+| Supported claims | 10 |
+| Correctly detected bad claims | 2/10 |
+| Correctly classified supported claims | 9/10 |
+| False positives | 1 |
+| False negatives | 8 |
+| Detection recall | 20% |
+| False-negative rate | 80% |
+
+#### Signal comparison
+
+| Signal | Correct detections | Correct non-detections | FP | FN |
+|---|---:|---:|---:|---:|
+| Deterministic only | 5 | 10 | 0 | 5 |
+| Semantic only | 2 | 9 | 1 | 8 |
+| Combined | 5 | 9 | 1 | 5 |
+
+Additional operational results:
+
+- Structured Output failures: 0;
+- other call failures: 0;
+- unclassified claims: 0;
+- average model latency: 2285 ms per claim;
+- approximate model latency for two claims in one Insight: 4.57 seconds.
+
+The last figure is derived from two sequential claim calls at the measured per-claim average; it is not a separately measured Route latency.
+
+## 15. What the New Results Mean
+
+### 15.1 Per-source structure improved observability, not classification
+
+The Verifier produced the required structured result and passed source-coverage checks for all 20 calls. This means the model returned the correct source identities in the expected shape.
+
+However, semantic claim recall fell to 20% in this measured run. The model still missed 8 of 10 claims that required detection.
+
+```text
+Correct source-assessment structure
+≠
+correct source-support judgment
+```
+
+### 15.2 The semantic Verifier added no unique correct detections
+
+In the signal comparison:
+
+```text
+Deterministic TP = 5
+Semantic TP = 2
+Combined TP = 5
+```
+
+Therefore, both semantic true positives overlapped with claims already detected by the deterministic cardinality rule. The semantic model contributed no additional correct detection for the remaining genuinely semantic failures in this run.
+
+### 15.3 Run-level metrics can still hide wrong-claim detection
+
+Run-level correct detections were `3`, while semantic claim-level correct detections were only `2` and there was one claim-level false positive. Because two correct claim detections can cover at most two runs, at least one failing run was counted as detected because the Verifier alerted on the wrong claim.
+
+This is why claim-level ground truth is necessary. A correct run-level label does not prove that the model found the real error.
+
+### 15.4 The deterministic rule delivered the reliable improvement
+
+The cardinality pre-check detected all five frozen quantity failures with zero false positives. It raised combined recall from the semantic-only `2/10` to `5/10`, but it could not address the five remaining semantic claims.
+
+This supports the engineering split:
+
+```text
+Application-known facts
+→ deterministic enforcement
+
+Meaning, attribution, and entailment
+→ semantic evaluation
+```
+
+### 15.5 Latency remains material
+
+The new full evaluation averaged 2285 ms per claim. Since each Insight currently produces a Pattern and an Interpretation claim, the model-only verification path adds roughly 4.57 seconds per Insight when the calls are sequential.
+
+The per-source output did not produce enough semantic improvement in this run to justify that latency, cost, and integration complexity.
+
+## 16. Current Engineering Decision
+
+The decision remains:
+
+- do not enter Step 6 Shadow Mode yet;
+- do not use the Verifier to block user-visible output;
+- do not implement repair/regeneration yet;
+- do not treat source-level `support` or `reason` as an audit fact;
+- keep the deterministic cardinality pre-check as a separately measured signal;
+- continue evaluating before any Route integration.
+
+Shadow Mode remains low product risk because it would not alter output. Integration is still premature because the semantic Verifier did not add unique correct detections in the latest full run and added substantial latency and cost.
+
+## 17. Concrete Next Workflow
+
+### Step A — Preserve the latest complete evaluation
+
+Save the complete per-run/per-claim output, including source assessments and reasons. The aggregate metrics prove poor reliability, but the full output is required to identify exactly how each semantic failure occurred.
+
+### Step B — Review the five remaining semantic claims
+
+For each non-cardinality failure, compare:
+
+```text
+atomic assertion
+→ source responsible for that assertion
+→ exact excerpt
+→ human support label
+→ verifier support label
+→ verifier reason
+```
+
+Do not infer exact latest-run failure examples from aggregate metrics alone.
+
+### Step C — Decompose compound claims
+
+Current Pattern and Interpretation strings can contain several assertions at once, for example:
+
+- same project;
+- same action;
+- same environment;
+- same mental state;
+- repeated occurrence;
+- a shared or contradictory relationship.
+
+The next experiment should represent these as smaller atomic assertions so one supported attribute cannot hide another unsupported attribute.
+
+### Step D — Keep deterministic checks outside the LLM
+
+Continue identifying facts the application can already know, such as:
+
+- number of unique cited sources;
+- whether every cited ID was assessed;
+- whether IDs and source labels match;
+- whether the output contains duplicates or fabricated sources.
+
+Do not ask the LLM to enforce these conditions.
+
+### Step E — Evaluate atomic semantic judgments
+
+Run the semantic model only on assertions that require meaning or entailment, such as whether a source explicitly supports a location, action, state, or relationship.
+
+Measure semantic-only and combined signals separately.
+
+### Step F — Re-run the identical frozen set
+
+After each meaningful change:
+
+1. reuse the same 10 frozen responses;
+2. preserve the same 20 claim-level labels or version them explicitly if decomposition changes the unit;
+3. record TP, TN, FP, FN, structured failures, latency, and call failures;
+4. compare both run-level and claim-level outcomes;
+5. inspect whether the correct claim and correct failure type were detected.
+
+### Step G — Reconsider Shadow Mode only after measured improvement
+
+Define acceptance criteria before the next evaluation. Consider Shadow Mode only when the semantic signal provides reliable diagnostic value beyond deterministic checks and its latency/cost are acceptable. Blocking and repair require separate, stronger evidence.
+
+## 18. Updated Interview Story — 90 Second Version
+
+**Problem →** LifeOS already checked that generated insights cited valid Reflection IDs and exact excerpts. But valid citations could still be used to support the wrong meaning, such as treating a Historical-only location or mental state as shared with the Current Reflection.
+
+**First solution →** I built a claim-level semantic Verifier for Pattern and Interpretation. I evaluated it before Route integration on 10 frozen model runs. The first evaluation had stable structured output but only 37.5% run-level recall, so I did not ship it.
+
+**Better evaluation →** I then created human ground truth for all 20 individual claims and tagged the failure types. This exposed cases where the run-level metric looked correct only because the Verifier flagged the wrong claim.
+
+**Engineering split →** Five failures were quantity/cardinality problems. The application already knew the number of unique Historical IDs, so I moved that rule into a deterministic pre-check. It detected all five frozen cardinality failures with no false positives.
+
+**Verifier V2 →** For the remaining semantic problems, I required a structured assessment for every cited source and added deterministic coverage checks for missing, duplicated, mislabeled, or fabricated sources.
+
+**Result →** The source structure was reliable, but semantic recall was only 20%. The combined system reached 50% recall, entirely because of the deterministic rule. The semantic Verifier added no unique correct detections and still added about 2.3 seconds per claim.
+
+**Decision and lesson →** I still did not integrate it into Shadow Mode or block output. The main lesson was to separate facts the application can enforce from judgments that truly require an LLM, and to evaluate a Verifier as another probabilistic model rather than treating it as trusted infrastructure.
+
+## 19. Interview Deep-Dive: How I Would Explain the Method
+
+### What process did you use?
+
+I started with a frozen regression case, established run-level results, then created claim-level human ground truth. I classified failure types, extracted deterministic rules, added tests before implementation, and re-ran the same inputs. I measured deterministic, semantic, and combined signals separately.
+
+### What actually solved part of the problem?
+
+The deterministic cardinality pre-check. It used unique Historical Reflection IDs already available to the application and detected all five frozen quantity failures without false positives.
+
+### What did not solve the semantic problem?
+
+Adding more Prompt rules and requiring per-source structured output. These changes improved traceability and output coverage, but the model still made incorrect support judgments. Semantic recall was 20% in the latest measured run.
+
+### Why not ship the combined system?
+
+Combined recall was only 50%, one supported claim was falsely flagged, and model verification added about 4.57 seconds per Insight. The semantic component added no unique correct detections beyond the deterministic rule.
+
+### What would you do next?
+
+Inspect the full latest per-claim output, decompose compound claims into atomic assertions, keep structural and counting rules deterministic, and re-evaluate the truly semantic judgments on the same frozen regression set.
+
+## 20. Updated Lessons
+
+1. Coarse run-level metrics can hide detection of the wrong claim.
+2. Human claim-level ground truth is required to evaluate a claim Verifier honestly.
+3. A deterministic pre-check can outperform an LLM on facts already represented in application data.
+4. Per-source structured output improves observability but does not guarantee correct semantic classification.
+5. A model-generated explanation can sound convincing while describing support that does not exist.
+6. Deterministic, semantic, and combined signals should be measured separately.
+7. A single successful manual example is only a smoke test, not evidence of reliability.
+8. Reliability work should remain outside user-visible flow until its value is demonstrated on frozen regression inputs.
