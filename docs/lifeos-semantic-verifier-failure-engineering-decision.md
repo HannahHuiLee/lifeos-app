@@ -228,7 +228,7 @@ After V2 is re-evaluated on the same frozen inputs and provides reliable enough 
 
 Step 5D was started because the original run-level evaluation was too coarse. A run contained two claims—Pattern and Interpretation—but the original ground truth only said whether the whole run was `supported` or `needs_detection`. If the Verifier flagged the wrong claim inside a failing run, the run-level metric could still count it as a successful detection.
 
-The work completed so far:
+The work completed in Step 5D:
 
 1. Defined a claim-level human-label contract.
 2. Added labels for all 20 frozen Pattern/Interpretation claims.
@@ -240,6 +240,8 @@ The work completed so far:
 8. Updated the Verifier prompt with per-source assessment rules.
 9. Ran a single manual Case-5-style check.
 10. Re-ran the complete 20-call evaluation on the same frozen inputs.
+11. Decomposed five semantic failures into manually defined atomic claims with exact target evidence.
+12. Added five matched supported controls and ran a 10-call atomic evaluation.
 
 The frozen claim-level ground truth contains:
 
@@ -494,116 +496,187 @@ The decision remains:
 
 Shadow Mode remains low product risk because it would not alter output. Integration is still premature because the semantic Verifier did not add unique correct detections in the latest full run and added substantial latency and cost.
 
-## 17. Concrete Next Workflow
+The later atomic-claim experiment improved diagnostic performance, but it did not change this integration decision. The result came from only 10 manually constructed claims in one measured run, automatic decomposition has not been built or evaluated, and one important semantic false negative remained.
 
-### Step A — Preserve the latest complete evaluation
+## 17. Atomic-Claim Experiment
 
-Save the complete per-run/per-claim output, including source assessments and reasons. The aggregate metrics prove poor reliability, but the full output is required to identify exactly how each semantic failure occurred.
+### 17.1 Why atomic claims were tested
 
-### Step B — Review the five remaining semantic claims
+The compound Pattern and Interpretation claims mixed several assertions, such as project continuity, UI work, environment, mental state, and source-wide support. A supported core assertion could hide one unsupported detail.
 
-For each non-cardinality failure, compare:
+The experiment therefore isolated five known semantic failures into manually written atomic claims. Each atomic fixture contained only the evidence needed for that assertion and declared whether the assertion was:
+
+- `shared`: attributed across all target sources; or
+- `source-specific`: attributed to one named source.
+
+The first five-call experiment contained only failing claims. It detected all five, but that result could not measure false positives. Five matched supported controls were then added so the final evaluation tested both sensitivity and specificity.
+
+### 17.2 Final matched-control result
+
+The final atomic evaluation used 10 claims:
+
+| Ground-truth group | Claims |
+|---|---:|
+| Semantic failures | 5 |
+| Matched supported controls | 5 |
+| **Total** | **10** |
+
+Actual metrics:
+
+| Metric | Result |
+|---|---:|
+| Correctly detected failures | 4/5 |
+| Correctly classified controls | 5/5 |
+| False positives | 0 |
+| False negatives | 1 |
+| Detection recall | 80% |
+| False-negative rate | 20% |
+| Exact status matches | 6/10 |
+| Structured Output failures | 0 |
+| Other call failures | 0 |
+| Unclassified claims | 0 |
+| Average latency per atomic claim | 2032 ms |
+
+Detection counted both `partial` and `unsupported` as a successful alert for a known failing claim. Four detected failures were classified as `partial` rather than the human label `unsupported`; only one of the five failing claims was an exact status match. All five supported controls were exact `supported` matches. Together, those outcomes explain the `6/10` exact-status result.
+
+### 17.3 What improved
+
+Compared with evaluating compound claims, manual atomic decomposition made the evidence relationship clearer:
+
+- four of five known semantic failures produced a detection signal;
+- all five supported controls passed;
+- no output-schema or API-call failure occurred;
+- source-level assessments made the unsupported source visible in the successful detections.
+
+This is evidence that claim granularity matters. It is not evidence that the entire Verifier is ready for integration.
+
+### 17.4 Remaining false negative: Run 07 environment
+
+The failed atomic claim said Current and Historical evidence showed work in two different environments. Historical evidence explicitly named Starbucks; Current evidence did not specify a location.
+
+The Verifier returned `supported`. Its reason treated the missing Current location as evidence of a different environment. That inference is invalid:
 
 ```text
-atomic assertion
-→ source responsible for that assertion
-→ exact excerpt
-→ human support label
-→ verifier support label
-→ verifier reason
+Current location is not stated
+≠
+Current location differs from Starbucks
 ```
 
-Do not infer exact latest-run failure examples from aggregate metrics alone.
+The user could have been in Starbucks, somewhere else, or the location could simply be unknown. Absence of a value cannot establish inequality with another value.
 
-### Step C — Decompose compound claims
+The output was also internally inconsistent: the Current source assessment was only `partial`, while the top-level status was `supported`. This shows that source assessments are useful diagnostic evidence but still require deterministic consistency rules or aggregation logic.
 
-Current Pattern and Interpretation strings can contain several assertions at once, for example:
+### 17.5 Why automatic decomposition is a separate reliability problem
 
-- same project;
-- same action;
-- same environment;
-- same mental state;
-- repeated occurrence;
-- a shared or contradictory relationship.
+The atomic claims in this experiment were manually written from known failures. A production system would need to create them automatically. That decomposition model or rule set could:
 
-The next experiment should represent these as smaller atomic assertions so one supported attribute cannot hide another unsupported attribute.
+- omit an important subclaim;
+- change the meaning or scope of a claim;
+- attach the wrong evidence;
+- invent a subclaim that the original output did not contain.
 
-### Step D — Keep deterministic checks outside the LLM
+Therefore, automatic decomposition needs its own ground truth and evaluation. The strong result from manually prepared atomic inputs cannot be transferred directly to an automatic pipeline.
 
-Continue identifying facts the application can already know, such as:
+## 18. Final Decision for Today
 
-- number of unique cited sources;
-- whether every cited ID was assessed;
-- whether IDs and source labels match;
-- whether the output contains duplicates or fabricated sources.
+Today’s Step 5D experiment is complete. The production integration decision is still **no**:
 
-Do not ask the LLM to enforce these conditions.
+- do not enter Step 6 Shadow Mode yet;
+- do not use the Verifier to block user output;
+- do not implement repair or regeneration yet.
 
-### Step E — Evaluate atomic semantic judgments
+Shadow Mode itself would not control or contaminate user-visible output; it is non-blocking by definition. The reason to wait is engineering value: the current diagnostic pipeline is not yet complete or reliable enough to justify integration latency, API cost, and operational complexity.
 
-Run the semantic model only on assertions that require meaning or entailment, such as whether a source explicitly supports a location, action, state, or relationship.
+The atomic result is promising, but the evidence is limited to 10 manually prepared claims and one measured run. One of five known failures was still allowed through, exact status agreement was 6/10, and each atomic call averaged about 2.0 seconds. Automatic decomposition and top-level/source-level consistency have not yet been evaluated.
 
-Measure semantic-only and combined signals separately.
+## 19. Recommended Next Step
 
-### Step F — Re-run the identical frozen set
+1. Preserve the same frozen compound inputs, claim-level labels, atomic fixtures, and matched controls as regression data.
+2. Define the contract for automatic claim decomposition, including atomic text, scope, and target evidence.
+3. Create human ground truth for decomposition itself: which subclaims must exist and which evidence each one may use.
+4. Add deterministic aggregation rules so a top-level `supported` result cannot conflict with a required source assessed as `partial` or `none`.
+5. Keep cardinality, ID coverage, duplicate detection, source labels, and other application-known facts in deterministic code.
+6. Reserve the LLM for entailment questions that actually require semantic judgment.
+7. Re-run the exact frozen inputs across multiple measured runs before comparing the result with explicit acceptance criteria.
+8. Reconsider non-blocking Shadow Mode only when the complete pipeline adds stable diagnostic value beyond deterministic checks at an acceptable latency and cost.
 
-After each meaningful change:
+Blocking and repair should remain later, separately evaluated decisions.
 
-1. reuse the same 10 frozen responses;
-2. preserve the same 20 claim-level labels or version them explicitly if decomposition changes the unit;
-3. record TP, TN, FP, FN, structured failures, latency, and call failures;
-4. compare both run-level and claim-level outcomes;
-5. inspect whether the correct claim and correct failure type were detected.
+## 20. Interview Story — 90 Second Version
 
-### Step G — Reconsider Shadow Mode only after measured improvement
+**Problem →** LifeOS already validated provenance: the model had to cite real Reflection IDs and exact excerpts. But a valid excerpt could still be used to support the wrong meaning, such as sharing a Historical-only location or mental state with the Current Reflection.
 
-Define acceptance criteria before the next evaluation. Consider Shadow Mode only when the semantic signal provides reliable diagnostic value beyond deterministic checks and its latency/cost are acceptable. Blocking and repair require separate, stronger evidence.
+**First solution →** I built a separate claim-level semantic Verifier and evaluated it before Route integration. On 10 frozen runs, its structured output was stable, but run-level detection recall was only 37.5%, so I chose not to ship it.
 
-## 18. Updated Interview Story — 90 Second Version
+**Better evaluation →** I added human labels for all 20 Pattern and Interpretation claims. That showed semantic claim recall of only 20% and revealed that a run-level success could come from flagging the wrong claim.
 
-**Problem →** LifeOS already checked that generated insights cited valid Reflection IDs and exact excerpts. But valid citations could still be used to support the wrong meaning, such as treating a Historical-only location or mental state as shared with the Current Reflection.
+**Engineering split →** Five failures were cardinality problems that the application could calculate from unique Historical IDs. A deterministic pre-check detected all five with no false positives. I also required one assessment per cited source and validated exact source coverage.
 
-**First solution →** I built a claim-level semantic Verifier for Pattern and Interpretation. I evaluated it before Route integration on 10 frozen model runs. The first evaluation had stable structured output but only 37.5% run-level recall, so I did not ship it.
+**Atomic experiment →** I manually decomposed five remaining semantic failures and added five matched supported controls. The Verifier detected four of five failures, passed all five controls, and reached 80% recall with no false positives. However, it still inferred that an unstated Current location meant a different environment, and exact status agreement was only 6/10.
 
-**Better evaluation →** I then created human ground truth for all 20 individual claims and tagged the failure types. This exposed cases where the run-level metric looked correct only because the Verifier flagged the wrong claim.
+**Decision →** I stopped before Shadow Mode, blocking, or repair. The atomic result was encouraging but too small and too manual for production. My next step is to evaluate automatic decomposition and add deterministic consistency rules.
 
-**Engineering split →** Five failures were quantity/cardinality problems. The application already knew the number of unique Historical IDs, so I moved that rule into a deterministic pre-check. It detected all five frozen cardinality failures with no false positives.
+**Lesson →** Use deterministic checks for facts the application already knows, keep semantic claims atomic, and evaluate every AI reliability component as another probabilistic system.
 
-**Verifier V2 →** For the remaining semantic problems, I required a structured assessment for every cited source and added deterministic coverage checks for missing, duplicated, mislabeled, or fabricated sources.
+## 21. Interview Deep-Dive Points
 
-**Result →** The source structure was reliable, but semantic recall was only 20%. The combined system reached 50% recall, entirely because of the deterministic rule. The semantic Verifier added no unique correct detections and still added about 2.3 seconds per claim.
+### Why was provenance validation not enough?
 
-**Decision and lesson →** I still did not integrate it into Shadow Mode or block output. The main lesson was to separate facts the application can enforce from judgments that truly require an LLM, and to evaluate a Verifier as another probabilistic model rather than treating it as trusted infrastructure.
+It proved that IDs and excerpts were real and correctly copied. It did not prove that an excerpt entailed the generated claim or that an attribute belonged to every source named by the claim.
 
-## 19. Interview Deep-Dive: How I Would Explain the Method
+### Why did claim-level ground truth matter?
 
-### What process did you use?
+A run contained two claims. The Verifier could flag the wrong one and still make the run look correctly detected. Claim-level labels exposed that metric error and identified the actual failure type.
 
-I started with a frozen regression case, established run-level results, then created claim-level human ground truth. I classified failure types, extracted deterministic rules, added tests before implementation, and re-ran the same inputs. I measured deterministic, semantic, and combined signals separately.
+### Why was prompt engineering not enough?
 
-### What actually solved part of the problem?
+The prompt could request source-by-source reasoning, but it could not guarantee correct semantic classification. The model still returned convincing reasons for support relationships that were absent or logically invalid.
 
-The deterministic cardinality pre-check. It used unique Historical Reflection IDs already available to the application and detected all five frozen quantity failures without false positives.
+### What did deterministic code improve?
 
-### What did not solve the semantic problem?
+It detected all five frozen cardinality violations with zero false positives by counting unique Historical IDs. It also enforced exact source-assessment coverage. These were facts already present in application data, so an LLM was unnecessary.
 
-Adding more Prompt rules and requiring per-source structured output. These changes improved traceability and output coverage, but the model still made incorrect support judgments. Semantic recall was 20% in the latest measured run.
+### Why separate deterministic, semantic, and combined metrics?
 
-### Why not ship the combined system?
+Without separation, the combined result could make the LLM look useful when all correct detections came from deterministic code. In the compound 20-claim rerun, the semantic Verifier added no unique true positives beyond the cardinality pre-check.
 
-Combined recall was only 50%, one supported claim was falsely flagged, and model verification added about 4.57 seconds per Insight. The semantic component added no unique correct detections beyond the deterministic rule.
+### Why did atomic decomposition help?
 
-### What would you do next?
+It removed supported details that could mask one unsupported assertion and restricted the model to the relevant evidence. In the measured 10-claim atomic set, recall reached 80% and all five controls passed.
 
-Inspect the full latest per-claim output, decompose compound claims into atomic assertions, keep structural and counting rules deterministic, and re-evaluate the truly semantic judgments on the same frozen regression set.
+### Why is the atomic result not enough to ship?
 
-## 20. Updated Lessons
+The sample was small, the claims were manually decomposed from known failures, and the result came from one measured run. One important false negative remained, exact status agreement was 6/10, and automatic decomposition was not tested.
 
-1. Coarse run-level metrics can hide detection of the wrong claim.
-2. Human claim-level ground truth is required to evaluate a claim Verifier honestly.
-3. A deterministic pre-check can outperform an LLM on facts already represented in application data.
-4. Per-source structured output improves observability but does not guarantee correct semantic classification.
-5. A model-generated explanation can sound convincing while describing support that does not exist.
-6. Deterministic, semantic, and combined signals should be measured separately.
-7. A single successful manual example is only a smoke test, not evidence of reliability.
-8. Reliability work should remain outside user-visible flow until its value is demonstrated on frozen regression inputs.
+### Why is the Run 07 inference wrong?
+
+Current evidence did not state a location. That leaves the location unknown; it does not prove that it differed from Starbucks. The same location and a different location are both possible.
+
+### Would Shadow Mode affect users?
+
+No. Shadow Mode would observe and record results without changing user output. It is still premature because an incomplete diagnostic pipeline would add latency, cost, and complexity without stable enough information.
+
+### Why separate detection from repair?
+
+Detection must first show that it can locate the real error. Repair adds another model step that may change supported content or introduce new errors. Combining them too early would make failures harder to attribute.
+
+### Why keep frozen inputs and matched controls?
+
+Frozen inputs make iterations comparable. Matched controls test whether improved sensitivity also creates false positives on similar but genuinely supported claims.
+
+### What would Verifier V2 change next?
+
+It would evaluate automatic atomic decomposition, enforce deterministic consistency between source assessments and the overall status, preserve deterministic application checks, and measure repeated runs against explicit acceptance criteria.
+
+## 22. Learning Summary
+
+1. A Verifier is another probabilistic model and must itself be evaluated.
+2. Structured output and complete source coverage do not imply semantic correctness.
+3. Run-level metrics can hide detection of the wrong claim; claim-level ground truth is essential.
+4. Prompt rules are not deterministic enforcement.
+5. Facts already known by the application belong in deterministic code.
+6. Atomic claims can improve semantic evaluation, but automatic decomposition creates a new reliability boundary.
+7. Missing evidence means unknown, not the opposite value.
+8. Model reasons are diagnostic text, not auditable facts.
+9. Matched supported controls are necessary for measuring false-positive risk.
+10. AI reliability changes should be measured on frozen regression sets before they affect user-visible output.
