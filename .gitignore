@@ -50,3 +50,11 @@ next-env.d.ts
 /.claude
 /.next
 /.windsurf
+
+# local databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3

@@ -205,22 +205,23 @@ describe('claimVerificationFixtures', () => {
             )
         ).toEqual([
             {
-                name: 'supported shared LifeOS work',
+                name:
+                    'supported shared synthetic project work',
                 expectedStatus: 'supported',
             },
             {
                 name:
-                    'partial historical-only location',
+                    'partial historical-only synthetic location',
                 expectedStatus: 'partial',
             },
             {
                 name:
-                    'unsupported Case 5 attribution',
+                    'unsupported synthetic historical-only attribution',
                 expectedStatus: 'unsupported',
             },
             {
                 name:
-                    'partial repeated claim with one source',
+                    'partial synthetic repeated claim with one source',
                 expectedStatus: 'partial',
             },
         ]);
@@ -234,7 +235,7 @@ describe('claimVerificationFixtures', () => {
                     claimVerificationFixtures.find(
                         ({ name }) =>
                             name ===
-                            'partial repeated claim with one source'
+                            'partial synthetic repeated claim with one source'
                     );
 
                 if (!fixture) {
