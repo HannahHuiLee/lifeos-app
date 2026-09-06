@@ -6,6 +6,11 @@ import {
     vi,
 } from 'vitest';
 
+import {
+    syntheticCases,
+    syntheticReflectionTimeline,
+} from '@/evals/fixtures/reflection-timeline.synthetic';
+
 const { findManyMock } = vi.hoisted(() => ({
     findManyMock: vi.fn(),
 }));
@@ -138,6 +143,80 @@ describe('retrieveRelevantReflections', () => {
         ).resolves.toEqual([]);
     });
 
+    it('retrieves the canonical synthetic timeline with duplicate evidence removed', async () => {
+        const fixture =
+            syntheticCases.find(
+                ({ id }) =>
+                    id === 'duplicate-evidence'
+            );
+
+        if (!fixture) {
+            throw new Error(
+                'Synthetic duplicate case was not found'
+            );
+        }
+
+        const current =
+            syntheticReflectionTimeline.find(
+                ({ id }) =>
+                    id ===
+                    fixture.currentReflectionId
+            );
+
+        if (!current) {
+            throw new Error(
+                'Synthetic current Reflection was not found'
+            );
+        }
+
+        const historicalCandidates =
+            syntheticReflectionTimeline
+                .filter(
+                    ({ id, createdAt }) =>
+                        id !== current.id &&
+                        new Date(createdAt) <
+                        new Date(
+                            current.createdAt
+                        )
+                )
+                .sort(
+                    (left, right) =>
+                        new Date(
+                            right.createdAt
+                        ).getTime() -
+                        new Date(
+                            left.createdAt
+                        ).getTime()
+                )
+                .map((reflection) => ({
+                    ...reflection,
+                    createdAt: new Date(
+                        reflection.createdAt
+                    ),
+                }));
+
+        findManyMock.mockResolvedValue(
+            historicalCandidates
+        );
+
+        const result =
+            await retrieveRelevantReflections({
+                ...current,
+                createdAt: new Date(
+                    current.createdAt
+                ),
+            });
+
+        expect(
+            result.map(({ id }) => id)
+        ).toEqual(
+            fixture.expectedRetrievedIds
+        );
+
+        expect(
+            result.map(({ id }) => id)
+        ).not.toContain('syn-ref-001');
+    });
 
     it('keeps only the newest of duplicate Historical Reflections', async () => {
         const currentReflection = {

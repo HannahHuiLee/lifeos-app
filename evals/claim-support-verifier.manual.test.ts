@@ -5,8 +5,9 @@ import {
 } from 'vitest';
 
 import {
-    claimVerificationFixtures,
-} from '@/evals/fixtures/claim-verification';
+    buildSyntheticVerifyClaimInput,
+    syntheticCases,
+} from '@/evals/fixtures/reflection-timeline.synthetic';
 
 import {
     verifyClaimSupport,
@@ -33,26 +34,35 @@ describeRealVerifier(
     'real claim support verifier',
     () => {
         it(
-            'checks the frozen Case 5 attribution',
+            'checks the canonical synthetic historical-only attribution',
             async () => {
                 const fixture =
-                    claimVerificationFixtures.find(
-                        ({ name }) =>
-                            name ===
-                            'unsupported Case 5 attribution'
+                    syntheticCases.find(
+                        ({ id }) =>
+                            id ===
+                            'historical-only-attribution'
                     );
 
-                if (!fixture) {
+                if (
+                    !fixture ||
+                    !('claim' in fixture)
+                ) {
                     throw new Error(
-                        'Case 5 fixture was not found'
+                        'Synthetic historical-only attribution case was not found'
                     );
                 }
 
+                const input =
+                    buildSyntheticVerifyClaimInput(
+                        fixture
+                    );
+
                 const startedAt = Date.now();
 
-                const result = await verifyClaimSupport(
-                    fixture.input
-                );
+                const result =
+                    await verifyClaimSupport(
+                        input
+                    );
 
                 const durationMs =
                     Date.now() - startedAt;
@@ -60,10 +70,12 @@ describeRealVerifier(
                 console.info(
                     'Claim verifier manual result:',
                     {
-                        fixture: fixture.name,
+                        fixture: fixture.id,
                         expectedStatus:
-                            fixture.expectedStatus,
-                        actualStatus: result.status,
+                            fixture.claim
+                                .expectedStatus,
+                        actualStatus:
+                            result.status,
                         reason: result.reason,
                         sourceAssessments:
                             result.sourceAssessments,
@@ -72,13 +84,16 @@ describeRealVerifier(
                 );
 
                 expect(result.claimId).toBe(
-                    fixture.input.claim.claimId
+                    input.claim.claimId
                 );
 
                 const expectedSourceKeys =
-                    fixture.input.evidence
+                    input.evidence
                         .map(
-                            ({ source, reflectionId }) =>
+                            ({
+                                source,
+                                reflectionId,
+                            }) =>
                                 `${source}:${reflectionId}`
                         )
                         .sort();
@@ -86,7 +101,10 @@ describeRealVerifier(
                 const actualSourceKeys =
                     result.sourceAssessments
                         .map(
-                            ({ source, reflectionId }) =>
+                            ({
+                                source,
+                                reflectionId,
+                            }) =>
                                 `${source}:${reflectionId}`
                         )
                         .sort();
@@ -94,7 +112,6 @@ describeRealVerifier(
                 expect(actualSourceKeys).toEqual(
                     expectedSourceKeys
                 );
-
             },
             30_000
         );
