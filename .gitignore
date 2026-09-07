@@ -59,3 +59,8 @@ next-env.d.ts
 *.db-shm
 *.sqlite
 *.sqlite3
+
+# private engineering notes
+/docs/lifeos-interview-architecture-one-pager.md
+/docs/lifeos-day-2-grounding-reliability-semantic-verifier.md
+/docs/lifeos-semantic-verifier-failure-engineering-decision.md

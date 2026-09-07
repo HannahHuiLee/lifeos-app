@@ -186,7 +186,6 @@ npm run build
 
 - [Evidence-backed Reflection milestone](docs/evidence-backed-reflection-milestone.md)
 - [Grounding Reliability V3 engineering notes](docs/grounding-reliability-v3-engineering-notes.md)
-- [Semantic verifier engineering decision](docs/lifeos-semantic-verifier-failure-engineering-decision.md)
 - [Listening Coach V2 snapshot architecture](docs/listening-coach-v2-snapshot-based-custom-practice.md)
 - [Evaluation fixtures and saved runs](evals/)
 
