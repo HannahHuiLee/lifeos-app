@@ -11,11 +11,15 @@ import { POST } from '@/app/api/listening-sessions/[id]/analyze/route';
 const {
   findUniqueSessionMock,
   updateSessionMock,
+  updateUnitMock,
   parseResponseMock,
+  transactionMock,
 } = vi.hoisted(() => ({
   findUniqueSessionMock: vi.fn(),
   updateSessionMock: vi.fn(),
+  updateUnitMock: vi.fn(),
   parseResponseMock: vi.fn(),
+  transactionMock: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -24,6 +28,10 @@ vi.mock('@/lib/prisma', () => ({
       findUnique: findUniqueSessionMock,
       update: updateSessionMock,
     },
+    learningUnit: {
+      update: updateUnitMock,
+    },
+    $transaction: transactionMock,
   },
 }));
 
@@ -124,6 +132,7 @@ function createSession(
       'AI is changing technical workflows.',
     analysis: null,
     model: null,
+    learningUnitId: null,
     createdAt: new Date(
       '2026-08-30T16:00:00.000Z'
     ),
@@ -151,7 +160,9 @@ describe(
     beforeEach(() => {
       findUniqueSessionMock.mockReset();
       updateSessionMock.mockReset();
+      updateUnitMock.mockReset();
       parseResponseMock.mockReset();
+      transactionMock.mockReset();
       vi.unstubAllEnvs();
 
       vi.stubEnv('MOCK_LLM', 'false');
@@ -172,6 +183,17 @@ describe(
           ),
           model: 'test-model',
         })
+      );
+      updateUnitMock.mockResolvedValue({
+        id: 'unit-1',
+        status: 'covered',
+      });
+      transactionMock.mockImplementation(
+        async (callback) =>
+          callback({
+            listeningSession: { update: updateSessionMock },
+            learningUnit: { update: updateUnitMock },
+          })
       );
     });
 
@@ -217,8 +239,59 @@ describe(
             model: 'test-model',
           },
         });
+        expect(updateUnitMock).not.toHaveBeenCalled();
       }
     );
+
+    it('marks the linked unit covered after successful analysis', async () => {
+      findUniqueSessionMock.mockResolvedValue(
+        createSession({
+          learningUnitId: 'unit-1',
+          practiceSnapshot: JSON.stringify(customSnapshot),
+        })
+      );
+
+      const response = await analyzeSession();
+
+      expect(response.status).toBe(200);
+      expect(updateUnitMock).toHaveBeenCalledWith({
+        where: { id: 'unit-1' },
+        data: { status: 'covered' },
+      });
+    });
+
+    it('does not cover the linked unit when analysis has no parsed output', async () => {
+      findUniqueSessionMock.mockResolvedValue(
+        createSession({
+          learningUnitId: 'unit-1',
+          practiceSnapshot: JSON.stringify(customSnapshot),
+        })
+      );
+      parseResponseMock.mockResolvedValue({ output_parsed: null });
+
+      const response = await analyzeSession();
+
+      expect(response.status).toBe(502);
+      expect(transactionMock).not.toHaveBeenCalled();
+      expect(updateSessionMock).not.toHaveBeenCalled();
+      expect(updateUnitMock).not.toHaveBeenCalled();
+    });
+
+    it('does not update the unit when saving session analysis fails', async () => {
+      findUniqueSessionMock.mockResolvedValue(
+        createSession({
+          learningUnitId: 'unit-1',
+          practiceSnapshot: JSON.stringify(customSnapshot),
+        })
+      );
+      updateSessionMock.mockRejectedValue(new Error('database write failed'));
+
+      const response = await analyzeSession();
+
+      expect(response.status).toBe(500);
+      expect(transactionMock).toHaveBeenCalledOnce();
+      expect(updateUnitMock).not.toHaveBeenCalled();
+    });
 
     it(
       'preserves the legacy catalog fallback',

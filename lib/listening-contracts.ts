@@ -123,6 +123,11 @@ export const CreateListeningSessionInputSchema =
             practiceId: z.never().optional(),
             practiceSnapshot:
                 ListeningPracticeSnapshotSchema,
+            learningUnitId: z
+                .string()
+                .trim()
+                .min(1)
+                .optional(),
             answer: ListeningAnswerSchema,
         }),
     ]);

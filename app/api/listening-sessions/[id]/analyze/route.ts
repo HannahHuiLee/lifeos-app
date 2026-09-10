@@ -238,16 +238,29 @@ ${session.answer}
     const validatedResult =
       ListeningAnalysisSchema.parse(result);
 
-    const updatedSession =
-      await prisma.listeningSession.update({
-        where: {
-          id: session.id,
-        },
-        data: {
-          analysis: JSON.stringify(validatedResult),
-          model,
-        },
-      });
+    const updatedSession = await prisma.$transaction(
+      async (transaction) => {
+        const savedSession =
+          await transaction.listeningSession.update({
+            where: {
+              id: session.id,
+            },
+            data: {
+              analysis: JSON.stringify(validatedResult),
+              model,
+            },
+          });
+
+        if (session.learningUnitId) {
+          await transaction.learningUnit.update({
+            where: { id: session.learningUnitId },
+            data: { status: 'covered' },
+          });
+        }
+
+        return savedSession;
+      }
+    );
 
     return NextResponse.json({
       session: {

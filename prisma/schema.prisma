@@ -50,18 +50,58 @@ model RecentPatternAnalysis {
   createdAt       DateTime @default(now())
 }
 
-
 // practiceId：V1 固定练习标识；旧 Session 使用它回到静态 catalog
 // practiceSnapshot：V2 自定义 source + exercise 的不可变 JSON 快照
 // answer：用户的英文总结
 // analysis：AI 返回的结构化反馈，以 JSON 字符串保存
 
 model ListeningSession {
-  id         String   @id @default(cuid())
-  practiceId String
-  answer     String
-  analysis   String?
-  model      String?
+  id               String   @id @default(cuid())
+  practiceId       String
+  answer           String
+  analysis         String?
+  model            String?
   practiceSnapshot String?
+  learningUnitId   String?
+  createdAt        DateTime @default(now())
+
+  learningUnit LearningUnit? @relation(fields: [learningUnitId], references: [id], onDelete: SetNull)
+
+  @@index([learningUnitId])
+}
+
+// Material owns reusable source-level metadata. String fields are validated at
+// the API boundary so SQLite stays easy to migrate and future values can evolve.
+model Material {
+  id         String   @id @default(cuid())
+  type       String
+  title      String
+  sourceUrl  String?
+  difficulty String?
+  status     String   @default("active")
   createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  units LearningUnit[]
+}
+
+// LearningUnit is the durable progress boundary shared by audio and text.
+// Session snapshots still preserve exactly what was practiced at that moment.
+model LearningUnit {
+  id         String   @id @default(cuid())
+  materialId String
+  order      Int
+  type       String
+  start      Float?
+  end        Float?
+  content    String
+  status     String   @default("pending")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  material Material           @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  sessions ListeningSession[]
+
+  @@unique([materialId, order])
+  @@index([materialId, status])
 }

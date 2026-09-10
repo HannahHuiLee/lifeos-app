@@ -9,8 +9,14 @@ import {
 } from '@/lib/listening-analysis';
 
 import {
+    ListeningPracticeSnapshotSchema,
     CreateListeningSessionInputSchema,
 } from '@/lib/listening-contracts';
+import {
+    LearningUnitTypeSchema,
+    MaterialTypeSchema,
+    isListeningMaterialType,
+} from '@/lib/learning-materials';
 
 // JSON.parse → Zod 校验 → 有效分析或 null
 function parseAnalysis(
@@ -54,16 +60,27 @@ export async function GET() {
 
         const history = sessions.map((session) => {
             const practice = getListeningPractice(session.practiceId);
+            const snapshot = session.practiceSnapshot
+                ? ListeningPracticeSnapshotSchema.safeParse(
+                    JSON.parse(session.practiceSnapshot)
+                )
+                : null;
 
             return {
                 id: session.id,
                 practiceId: session.practiceId,
-                practice: practice
+                practice: snapshot?.success
+                    ? {
+                        title: snapshot.data.source.title,
+                        level: snapshot.data.source.difficulty,
+                    }
+                    : practice
                     ? {
                         title: practice.title,
                         level: practice.level,
                     }
                     : null,
+                learningUnitId: session.learningUnitId,
                 answer: session.answer,
                 analysis: parseAnalysis(session.analysis),
                 model: session.model,
@@ -116,12 +133,69 @@ export async function POST(request: Request) {
 
     let practiceId: string;
     let practiceSnapshot: string | undefined;
+    let learningUnitId: string | undefined;
 
     if (input.practiceSnapshot) {
         practiceId = 'custom';
         practiceSnapshot = JSON.stringify(
             input.practiceSnapshot
         );
+        learningUnitId = input.learningUnitId;
+
+        if (learningUnitId) {
+            const unit = await prisma.learningUnit.findUnique({
+                where: { id: learningUnitId },
+                include: { material: true },
+            });
+
+            if (!unit) {
+                return NextResponse.json(
+                    { error: 'Learning Unit 不存在' },
+                    { status: 404 }
+                );
+            }
+
+            const materialTypeResult = MaterialTypeSchema.safeParse(
+                unit.material.type
+            );
+            const unitTypeResult = LearningUnitTypeSchema.safeParse(
+                unit.type
+            );
+
+            if (!materialTypeResult.success || !unitTypeResult.success) {
+                return NextResponse.json(
+                    { error: 'Learning Unit 保存的数据无效' },
+                    { status: 500 }
+                );
+            }
+
+            const materialType = materialTypeResult.data;
+
+            if (!isListeningMaterialType(materialType)) {
+                return NextResponse.json(
+                    { error: '这个 Learning Unit 不能用于 Listening Coach' },
+                    { status: 400 }
+                );
+            }
+
+            if (
+                unitTypeResult.data !== 'audio_segment' ||
+                input.practiceSnapshot.source.sourceType !== materialType ||
+                unit.content !== input.practiceSnapshot.source.transcript
+            ) {
+                return NextResponse.json(
+                    { error: '练习 snapshot 与 Learning Unit 不匹配' },
+                    { status: 400 }
+                );
+            }
+
+            if (unit.status === 'covered') {
+                return NextResponse.json(
+                    { error: '这个 Learning Unit 已完成' },
+                    { status: 409 }
+                );
+            }
+        }
     } else {
         if (!input.practiceId) {
             return NextResponse.json(
@@ -150,6 +224,7 @@ export async function POST(request: Request) {
                 data: {
                     practiceId,
                     practiceSnapshot,
+                    learningUnitId,
                     answer: input.answer,
                 },
             });

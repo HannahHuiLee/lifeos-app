@@ -196,6 +196,7 @@ describe(
                             source: validSource,
                             exercise: validExercise,
                         },
+                        learningUnitId: 'unit-1',
                         answer:
                             'The speaker explains how AI changes technical work.',
                     });

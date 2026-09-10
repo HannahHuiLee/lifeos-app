@@ -11,9 +11,11 @@ import { POST } from '@/app/api/listening-sessions/route';
 const {
   createSessionMock,
   findManySessionsMock,
+  findUniqueUnitMock,
 } = vi.hoisted(() => ({
   createSessionMock: vi.fn(),
   findManySessionsMock: vi.fn(),
+  findUniqueUnitMock: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -21,6 +23,9 @@ vi.mock('@/lib/prisma', () => ({
     listeningSession: {
       create: createSessionMock,
       findMany: findManySessionsMock,
+    },
+    learningUnit: {
+      findUnique: findUniqueUnitMock,
     },
   },
 }));
@@ -68,6 +73,16 @@ const validSnapshot = {
   },
 };
 
+function snapshotWithSourceType(sourceType: 'video' | 'podcast') {
+  return {
+    ...validSnapshot,
+    source: {
+      ...validSnapshot.source,
+      sourceType,
+    },
+  };
+}
+
 function createRequest(
   body: unknown,
   raw = false
@@ -89,6 +104,7 @@ function createRequest(
 describe('POST /api/listening-sessions', () => {
   beforeEach(() => {
     createSessionMock.mockReset();
+    findUniqueUnitMock.mockReset();
 
     createSessionMock.mockImplementation(
       async ({ data }) => ({
@@ -121,6 +137,7 @@ describe('POST /api/listening-sessions', () => {
         data: {
           practiceId: 'team-picnic-ride',
           practiceSnapshot: undefined,
+          learningUnitId: undefined,
           answer: 'Daniel needs a ride.',
         },
       });
@@ -154,8 +171,128 @@ describe('POST /api/listening-sessions', () => {
           createArguments.data.practiceSnapshot
         )
       ).toEqual(validSnapshot);
+      expect(createArguments.data.learningUnitId).toBeUndefined();
     }
   );
+
+  it('links a matching podcast unit to the session', async () => {
+    const podcastSnapshot = snapshotWithSourceType('podcast');
+
+    findUniqueUnitMock.mockResolvedValue({
+      id: 'unit-1',
+      type: 'audio_segment',
+      content: podcastSnapshot.source.transcript,
+      status: 'pending',
+      material: { type: 'podcast' },
+    });
+
+    const response = await POST(
+      createRequest({
+        practiceSnapshot: podcastSnapshot,
+        learningUnitId: 'unit-1',
+        answer: 'AI is changing technical workflows.',
+      })
+    );
+
+    expect(response.status).toBe(201);
+    expect(createSessionMock.mock.calls[0][0].data.learningUnitId).toBe(
+      'unit-1'
+    );
+  });
+
+  it('links a matching video unit to the session', async () => {
+    findUniqueUnitMock.mockResolvedValue({
+      id: 'unit-video',
+      type: 'audio_segment',
+      content: validSnapshot.source.transcript,
+      status: 'pending',
+      material: { type: 'video' },
+    });
+
+    const response = await POST(
+      createRequest({
+        practiceSnapshot: validSnapshot,
+        learningUnitId: 'unit-video',
+        answer: 'AI is changing technical workflows.',
+      })
+    );
+
+    expect(response.status).toBe(201);
+    expect(createSessionMock.mock.calls[0][0].data.learningUnitId).toBe(
+      'unit-video'
+    );
+  });
+
+  it('rejects a snapshot source type that does not match its material', async () => {
+    findUniqueUnitMock.mockResolvedValue({
+      id: 'unit-1',
+      type: 'audio_segment',
+      content: validSnapshot.source.transcript,
+      status: 'pending',
+      material: { type: 'podcast' },
+    });
+
+    const response = await POST(
+      createRequest({
+        practiceSnapshot: validSnapshot,
+        learningUnitId: 'unit-1',
+        answer: 'My summary.',
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(createSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a snapshot that does not match its unit content', async () => {
+    findUniqueUnitMock.mockResolvedValue({
+      id: 'unit-1',
+      type: 'audio_segment',
+      content: 'Different persisted content',
+      status: 'pending',
+      material: { type: 'podcast' },
+    });
+
+    const response = await POST(
+      createRequest({
+        practiceSnapshot: snapshotWithSourceType('podcast'),
+        learningUnitId: 'unit-1',
+        answer: 'My summary.',
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(createSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects an article unit for Listening Coach', async () => {
+    findUniqueUnitMock.mockResolvedValue({
+      id: 'unit-1',
+      type: 'text_section',
+      content: validSnapshot.source.transcript,
+      status: 'pending',
+      material: { type: 'article' },
+    });
+
+    const response = await POST(
+      createRequest({
+        practiceSnapshot: validSnapshot,
+        learningUnitId: 'unit-1',
+        answer: 'My summary.',
+      })
+    );
+
+    const body = await response.json();
+
+    expect(body.error).toBe(
+      '这个 Learning Unit 不能用于 Listening Coach'
+    );
+    expect(findUniqueUnitMock).toHaveBeenCalled();
+
+    expect(response.status).toBe(400);
+    expect(createSessionMock).not.toHaveBeenCalled();
+
+  });
 
   it(
     'rejects an invalid custom snapshot',

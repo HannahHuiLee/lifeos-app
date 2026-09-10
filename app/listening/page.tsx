@@ -13,6 +13,9 @@ import type {
 } from '@/lib/listening-contracts';
 
 import CustomMaterialForm from './CustomMaterialForm';
+import MaterialLibrary, {
+    type ActiveLearningUnit,
+} from './MaterialLibrary';
 
 
 export default function ListeningPage() {
@@ -20,6 +23,9 @@ export default function ListeningPage() {
 
     const [customPractice, setCustomPractice] =
         useState<ListeningPracticeSnapshot | null>(null);
+    const [activeUnit, setActiveUnit] =
+        useState<ActiveLearningUnit | null>(null);
+    const [progressVersion, setProgressVersion] = useState(0);
 
     const [showTranscript, setShowTranscript] = useState(false);
 
@@ -62,6 +68,12 @@ export default function ListeningPage() {
                             ? {
                                 practiceSnapshot:
                                     customPractice,
+                                ...(activeUnit
+                                    ? {
+                                        learningUnitId:
+                                            activeUnit.id,
+                                    }
+                                    : {}),
                                 answer,
                             }
                             : {
@@ -92,7 +104,14 @@ export default function ListeningPage() {
             }
 
             setAnalysis(analyzeData.session.analysis);
-            setSubmitMessage('练习已分析并保存。');
+            setSubmitMessage(
+                activeUnit
+                    ? `Unit ${activeUnit.order} 已分析并标记为 covered。`
+                    : '练习已分析并保存。'
+            );
+            if (activeUnit) {
+                setProgressVersion((value) => value + 1);
+            }
         } catch (error) {
             setSubmitMessage(
                 error instanceof Error
@@ -108,6 +127,7 @@ export default function ListeningPage() {
         snapshot: ListeningPracticeSnapshot
     ) {
         setCustomPractice(snapshot);
+        setActiveUnit(null);
         setShowTranscript(false);
         setAnswer('');
         setAnalysis(null);
@@ -116,6 +136,7 @@ export default function ListeningPage() {
 
     function handleNewMaterial() {
         setCustomPractice(null);
+        setActiveUnit(null);
         setShowTranscript(false);
         setAnswer('');
         setAnalysis(null);
@@ -152,6 +173,32 @@ export default function ListeningPage() {
                 >
                     Add different material
                 </button>
+            )}
+
+            <MaterialLibrary
+                progressVersion={progressVersion}
+                onStart={(snapshot, unit) => {
+                    setCustomPractice(snapshot);
+                    setActiveUnit(unit);
+                    setShowTranscript(false);
+                    setAnswer('');
+                    setAnalysis(null);
+                    setSubmitMessage('');
+                }}
+            />
+
+            {activeUnit && (
+                <p
+                    style={{
+                        marginTop: '20px',
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        backgroundColor: '#dcfce7',
+                    }}
+                >
+                    {activeUnit.materialTitle}: Unit {activeUnit.order} of{' '}
+                    {activeUnit.totalUnits}
+                </p>
             )}
 
             <section
