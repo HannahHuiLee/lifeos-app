@@ -1,25 +1,46 @@
-# English Learning V1 Backlog
+# English Learning V1 Status
 
-The current vertical slice intentionally stops at persistent video/podcast
-units, Listening Coach practice, covered progress, resume, and saved article
-text units.
+## Implemented
 
-## Weekend V1 candidates
+- Shared Material and LearningUnit persistence, progress, and resume.
+- Separate Reading and Listening practice flows.
+- Reading answer and source-snapshot persistence.
+- Structured Reading analysis.
+- Transactional analysis and progress updates.
+- Unified material entry with legacy demo content removed from the primary UI.
+- Accessible answer fields and clearly labeled mock feedback.
 
-- Add optional manual timestamps and segment-aware playback for podcast/video
-  units; today's deterministic transcript splitter does not locate audio.
-- Build the first Reading Coach flow on top of existing article text units.
-- Add an accessible label for the listening-summary textarea.
-- Prevent duplicate sessions when saving succeeds but analysis fails and the
-  user retries the whole submission.
-- Verify Prisma migration deployment with a supported Node/Prisma toolchain;
-  Prisma 5.22's schema engine failed under the local Node 24 environment even
-  though the schema validated and every migration applied successfully with
-  SQLite directly.
+## Verified
 
-## Later, not part of this V1
+- 182 automated tests passed; 3 skipped.
+- TypeScript check passed.
+- Production build passed.
+- Temporary SQLite verification passed:
+  migration replay, transaction rollback, successful commit,
+  and history preservation after material deletion.
+- Manual Reading and Listening progress flows verified.
+- Real-model Reading analysis completed successfully.
+- Completion flow verified through `1 / 1`.
+- Revised Reading prompt no longer produced unsupported numerical deduction
+  in the evaluated sample.
 
-- Expression Bank and mastery states.
-- Spaced repetition and cross-material review.
-- Readiness scoring and weekly dashboards.
-- URL scraping, automatic transcription, and semantic segmentation.
+## Known limitations
+
+- Evidence qualifiers are not always preserved precisely.
+  Example: participant self-report may be summarized too strongly.
+- Similar feedback may appear in both missing-points and correction sections.
+
+
+## Optional follow-up
+
+- Improve retry and idempotency behavior.
+- Add manual audio timestamps if later required.
+- Tighten MaterialWithUnits domain types for difficulty and material status.
+- Revisit forced two-unit split for short listening materials. It currently exists mainly to exercise the multi-unit lifecycle.
+
+## Outside V1
+
+- Expression Bank, mastery states, and spaced repetition.
+- Readiness engine and dashboards.
+- URL scraping and semantic segmentation.
+- Voice recording and Reading TTS.

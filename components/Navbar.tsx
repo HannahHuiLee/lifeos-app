@@ -20,7 +20,7 @@ export default function Navbar() {
             <Link href="/reflection" style={{ color: '#60a5fa', textDecoration: 'none' }}>✍️ Reflection</Link>
             <Link href="/agent" style={{ color: '#93c5fd', textDecoration: 'none', }}>🤖 Agent</Link>
             <Link href="/history" style={{ color: '#c4b5fd', textDecoration: 'none' }}>📚 History</Link>
-            <Link href="/listening" style={{ color: '#f9a8d4', textDecoration: 'none', }}>🎧 Listening Coach</Link>
+            <Link href="/listening" style={{ color: '#f9a8d4', textDecoration: 'none', }}>🎧 English Learning</Link>
         </nav>
     );
 }

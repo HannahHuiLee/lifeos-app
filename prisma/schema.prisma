@@ -70,6 +70,26 @@ model ListeningSession {
   @@index([learningUnitId])
 }
 
+model ReadingSession {
+  id             String   @id @default(cuid())
+  learningUnitId String?
+
+  // 保存提交时的标题和原文，避免材料修改影响历史分析。
+  materialTitle   String
+  contentSnapshot String
+  answer          String
+
+  // 先保存答案，分析成功后再填写结果和模型信息。
+  analysis  String?
+  model     String?
+  createdAt DateTime @default(now())
+
+  // 单元删除后保留历史会话，只清空关联。
+  learningUnit LearningUnit? @relation(fields: [learningUnitId], references: [id], onDelete: SetNull)
+
+  @@index([learningUnitId])
+}
+
 // Material owns reusable source-level metadata. String fields are validated at
 // the API boundary so SQLite stays easy to migrate and future values can evolve.
 model Material {
@@ -101,6 +121,7 @@ model LearningUnit {
 
   material Material           @relation(fields: [materialId], references: [id], onDelete: Cascade)
   sessions ListeningSession[]
+  readingSessions ReadingSession[]
 
   @@unique([materialId, order])
   @@index([materialId, status])

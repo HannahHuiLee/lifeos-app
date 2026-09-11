@@ -1,88 +1,66 @@
 'use client';
 
 import Link from 'next/link';
-
 import { useState } from 'react';
 
-import { listeningPractices } from '@/lib/listening-practices';
+import {
+    ListeningAnalysisSchema,
+    type ListeningAnalysis,
+} from '@/lib/listening-analysis';
+import type { ListeningPracticeSnapshot } from '@/lib/listening-contracts';
 
-import type { ListeningAnalysis } from '@/lib/listening-analysis';
-
-import type {
-    ListeningPracticeSnapshot,
-} from '@/lib/listening-contracts';
-
-import CustomMaterialForm from './CustomMaterialForm';
 import MaterialLibrary, {
     type ActiveLearningUnit,
 } from './MaterialLibrary';
 
+type ActivePractice = {
+    snapshot: ListeningPracticeSnapshot;
+    unit: ActiveLearningUnit;
+};
 
 export default function ListeningPage() {
-    const practice = listeningPractices[0];
-
-    const [customPractice, setCustomPractice] =
-        useState<ListeningPracticeSnapshot | null>(null);
-    const [activeUnit, setActiveUnit] =
-        useState<ActiveLearningUnit | null>(null);
+    const [activePractice, setActivePractice] =
+        useState<ActivePractice | null>(null);
     const [progressVersion, setProgressVersion] = useState(0);
 
-    const [showTranscript, setShowTranscript] = useState(false);
-
-    // Write Answer → Save → Mock AI Analyze
     const [answer, setAnswer] = useState('');
-    const [analysis, setAnalysis] =
-        useState<ListeningAnalysis | null>(null);
+    const [analysis, setAnalysis] = useState<ListeningAnalysis | null>(null);
+    const [analysisModel, setAnalysisModel] = useState('');
+    const [showTranscript, setShowTranscript] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [submitMessage, setSubmitMessage] = useState('');
+    const [message, setMessage] = useState('');
 
-    function handleAnswerChange(
-        event: React.ChangeEvent<HTMLTextAreaElement>
-    ) {
-        setAnswer(event.target.value);
+    function resetPracticeState() {
+        setAnswer('');
         setAnalysis(null);
-        setSubmitMessage('');
+        setAnalysisModel('');
+        setShowTranscript(false);
+        setMessage('');
     }
 
     async function handleSubmit() {
-        if (!answer.trim()) {
-            setSubmitMessage('请先写下你的英文总结。');
+        if (
+            !activePractice ||
+            !answer.trim() ||
+            isSubmitting ||
+            analysis
+        ) {
             return;
         }
 
         setIsSubmitting(true);
-        setAnalysis(null);
-        setSubmitMessage('');
+        setMessage('');
 
         try {
-            const saveResponse = await fetch(
-                '/api/listening-sessions',
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    //这是 UI 和 snapshot persistence 真正接通的位置。
-                    body: JSON.stringify(
-                        customPractice
-                            ? {
-                                practiceSnapshot:
-                                    customPractice,
-                                ...(activeUnit
-                                    ? {
-                                        learningUnitId:
-                                            activeUnit.id,
-                                    }
-                                    : {}),
-                                answer,
-                            }
-                            : {
-                                practiceId: practice.id,
-                                answer,
-                            }
-                    ),
-                }
-            );
+            const saveResponse = await fetch('/api/listening-sessions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    practiceSnapshot: activePractice.snapshot,
+                    learningUnitId: activePractice.unit.id,
+                    answer,
+                }),
+            });
 
             const saveData = await saveResponse.json();
 
@@ -90,58 +68,49 @@ export default function ListeningPage() {
                 throw new Error(saveData.error || '保存答案失败');
             }
 
+            if (
+                typeof saveData.session?.id !== 'string' ||
+                !saveData.session.id
+            ) {
+                throw new Error('保存接口未返回有效会话 ID');
+            }
+
             const analyzeResponse = await fetch(
-                `/api/listening-sessions/${saveData.session.id}/analyze`,
-                {
-                    method: 'POST',
-                }
+                `/api/listening-sessions/${encodeURIComponent(
+                    saveData.session.id
+                )}/analyze`,
+                { method: 'POST' }
             );
 
             const analyzeData = await analyzeResponse.json();
 
             if (!analyzeResponse.ok) {
-                throw new Error(analyzeData.error || 'AI 分析失败');
+                throw new Error(analyzeData.error || '分析失败');
             }
 
-            setAnalysis(analyzeData.session.analysis);
-            setSubmitMessage(
-                activeUnit
-                    ? `Unit ${activeUnit.order} 已分析并标记为 covered。`
-                    : '练习已分析并保存。'
+            const validatedAnalysis = ListeningAnalysisSchema.parse(
+                analyzeData.session?.analysis
             );
-            if (activeUnit) {
-                setProgressVersion((value) => value + 1);
+
+            if (typeof analyzeData.session?.model !== 'string') {
+                throw new Error('分析接口未返回有效模型信息');
             }
+
+            setAnalysis(validatedAnalysis);
+            setAnalysisModel(analyzeData.session.model);
+            setMessage('本单元已完成。阅读反馈后，可以返回材料库继续。');
+            setProgressVersion((value) => value + 1);
         } catch (error) {
-            setSubmitMessage(
-                error instanceof Error
-                    ? error.message
-                    : '提交失败，请稍后重试'
+            setMessage(
+                error instanceof Error ? error.message : '提交失败'
             );
         } finally {
             setIsSubmitting(false);
         }
     }
 
-    function handlePracticeGenerated(
-        snapshot: ListeningPracticeSnapshot
-    ) {
-        setCustomPractice(snapshot);
-        setActiveUnit(null);
-        setShowTranscript(false);
-        setAnswer('');
-        setAnalysis(null);
-        setSubmitMessage('');
-    }
-
-    function handleNewMaterial() {
-        setCustomPractice(null);
-        setActiveUnit(null);
-        setShowTranscript(false);
-        setAnswer('');
-        setAnalysis(null);
-        setSubmitMessage('');
-    }
+    const snapshot = activePractice?.snapshot;
+    const isMock = analysisModel.startsWith('mock');
 
     return (
         <main
@@ -151,517 +120,213 @@ export default function ListeningPage() {
                 padding: '0 20px 60px',
             }}
         >
-            <h1>Listening Coach</h1>
-
+            <h1>English Learning</h1>
             <p style={{ color: '#6b7280', lineHeight: 1.6 }}>
-                Listen first. Try to understand the situation without
-                translating every word.
+                Choose a material and continue your next learning unit.
             </p>
 
-            {!customPractice ? (
-                <CustomMaterialForm
-                    onGenerated={handlePracticeGenerated}
+            {/* 保持组件挂载，让它接收进度刷新；练习时隐藏材料入口。 */}
+            <div hidden={activePractice !== null}>
+                <MaterialLibrary
+                    progressVersion={progressVersion}
+                    onStart={(nextSnapshot, unit) => {
+                        resetPracticeState();
+                        setActivePractice({
+                            snapshot: nextSnapshot,
+                            unit,
+                        });
+                    }}
                 />
-            ) : (
-                <button
-                    type="button"
-                    onClick={handleNewMaterial}
-                    disabled={isSubmitting}
-                    style={{
-                        marginTop: '20px',
-                    }}
-                >
-                    Add different material
-                </button>
-            )}
+            </div>
 
-            <MaterialLibrary
-                progressVersion={progressVersion}
-                onStart={(snapshot, unit) => {
-                    setCustomPractice(snapshot);
-                    setActiveUnit(unit);
-                    setShowTranscript(false);
-                    setAnswer('');
-                    setAnalysis(null);
-                    setSubmitMessage('');
-                }}
-            />
+            {activePractice && snapshot && (
+                <section style={{ marginTop: '24px' }}>
+                    <button
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={() => {
+                            setActivePractice(null);
+                            resetPracticeState();
+                        }}
+                    >
+                        ← 返回材料库
+                    </button>
 
-            {activeUnit && (
-                <p
-                    style={{
-                        marginTop: '20px',
-                        padding: '12px 16px',
-                        borderRadius: '8px',
-                        backgroundColor: '#dcfce7',
-                    }}
-                >
-                    {activeUnit.materialTitle}: Unit {activeUnit.order} of{' '}
-                    {activeUnit.totalUnits}
-                </p>
-            )}
+                    <h2>Listening Practice</h2>
+                    <p>
+                        {activePractice.unit.materialTitle} · Unit{' '}
+                        {activePractice.unit.order} /{' '}
+                        {activePractice.unit.totalUnits}
+                    </p>
+                    <p>
+                        {snapshot.source.difficulty} ·{' '}
+                        {snapshot.exercise.topic}
+                    </p>
 
-            <section
-                style={{
-                    marginTop: '28px',
-                    padding: '24px',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '12px',
-                    backgroundColor: '#f9fafb',
-                }}
-            >
-                {customPractice ? (
-                    <>
-                        <p
-                            style={{
-                                margin: 0,
-                                color: '#6b7280',
-                            }}
-                        >
-                            {customPractice.source.difficulty}
-                        </p>
-
-                        <h2 style={{ marginTop: '8px' }}>
-                            {customPractice.source.title}
-                        </h2>
-
-                        <p style={{ color: '#6b7280' }}>
-                            Topic: {customPractice.exercise.topic}
-                        </p>
-
-                        {customPractice.source.sourceUrl && (
-                            <p>
-                                <a
-                                    href={
-                                        customPractice.source.sourceUrl
-                                    }
-                                    target="_blank"
-                                    rel="noreferrer"
-                                >
-                                    Open original source ↗
-                                </a>
-                            </p>
-                        )}
-
-                        <p
-                            style={{
-                                color: '#6b7280',
-                                lineHeight: 1.6,
-                            }}
-                        >
-                            Listen to the original source once
-                            before revealing the transcript.
-                        </p>
-
-                        <details
-                            style={{
-                                marginTop: '18px',
-                            }}
-                        >
-                            <summary>
-                                Useful phrases and vocabulary
-                            </summary>
-
-                            <h3>Useful phrases</h3>
-
-                            <ul style={{ lineHeight: 1.7 }}>
-                                {customPractice.exercise.usefulPhrases.map(
-                                    (phrase) => (
-                                        <li key={phrase}>{phrase}</li>
-                                    )
-                                )}
-                            </ul>
-
-                            <h3>Vocabulary</h3>
-
-                            <dl>
-                                {customPractice.exercise.vocabulary.map(
-                                    (item) => (
-                                        <div
-                                            key={item.term}
-                                            style={{
-                                                marginTop: '12px',
-                                            }}
-                                        >
-                                            <dt>
-                                                <strong>{item.term}</strong>
-                                            </dt>
-                                            <dd>{item.meaning}</dd>
-                                        </div>
-                                    )
-                                )}
-                            </dl>
-                        </details>
-
-                        <button
-                            type="button"
-                            onClick={() =>
-                                setShowTranscript(
-                                    (value) => !value
-                                )
-                            }
-                            style={{
-                                marginTop: '18px',
-                            }}
-                        >
-                            {showTranscript
-                                ? 'Hide transcript'
-                                : 'Show transcript'}
-                        </button>
-
-                        {showTranscript && (
-                            <div
-                                style={{
-                                    marginTop: '24px',
-                                    paddingTop: '20px',
-                                    borderTop:
-                                        '1px solid #e5e7eb',
-                                }}
+                    {snapshot.source.sourceUrl ? (
+                        <p>
+                            <a
+                                href={snapshot.source.sourceUrl}
+                                target="_blank"
+                                rel="noreferrer"
                             >
-                                <h3>Transcript</h3>
+                                Open original source ↗
+                            </a>
+                        </p>
+                    ) : (
+                        <p>请在原播放器中收听这份材料。</p>
+                    )}
 
-                                <p
-                                    style={{
-                                        whiteSpace: 'pre-wrap',
-                                        lineHeight: 1.7,
-                                    }}
-                                >
-                                    {
-                                        customPractice.source
-                                            .transcript
-                                    }
-                                </p>
-                            </div>
-                        )}
-                    </>
-                ) : (
-                    <>
+                    <p>
+                        Listen before revealing the transcript.
+                        当前文本单元尚未与音频时间戳对齐，
+                        请在原播放器中定位对应内容。
+                    </p>
+
+                    <button
+                        type="button"
+                        onClick={() => setShowTranscript((value) => !value)}
+                    >
+                        {showTranscript ? 'Hide transcript' : 'Show transcript'}
+                    </button>
+
+                    {showTranscript && (
                         <p
                             style={{
-                                margin: 0,
-                                color: '#6b7280',
+                                whiteSpace: 'pre-wrap',
+                                overflowWrap: 'anywhere',
+                                lineHeight: 1.8,
                             }}
                         >
-                            {practice.level}
+                            {snapshot.source.transcript}
                         </p>
+                    )}
 
-                        <h2 style={{ marginTop: '8px' }}>
-                            {practice.title}
-                        </h2>
+                    <details style={{ marginTop: '20px' }}>
+                        <summary>Useful phrases and vocabulary</summary>
 
-                        <audio
-                            controls
-                            preload="metadata"
-                            style={{
-                                width: '100%',
-                                marginTop: '20px',
-                            }}
-                        >
-                            <source
-                                src={practice.audioSrc}
-                                type="audio/mpeg"
-                            />
-
-                            Your browser does not support audio
-                            playback.
-                        </audio>
-
-                        <p
-                            style={{
-                                margin: '8px 0 0',
-                                color: '#6b7280',
-                                fontSize: '13px',
-                            }}
-                        >
-                            This lesson uses an AI-generated
-                            voice.
-                        </p>
-
-                        <button
-                            type="button"
-                            onClick={() =>
-                                setShowTranscript(
-                                    (value) => !value
-                                )
-                            }
-                            style={{
-                                marginTop: '18px',
-                            }}
-                        >
-                            {showTranscript
-                                ? 'Hide transcript'
-                                : 'Show transcript'}
-                        </button>
-
-                        {showTranscript && (
-                            <div
-                                style={{
-                                    marginTop: '24px',
-                                    paddingTop: '20px',
-                                    borderTop:
-                                        '1px solid #e5e7eb',
-                                }}
-                            >
-                                <h3>Transcript</h3>
-
-                                {practice.turns.map(
-                                    (turn, index) => (
-                                        <p
-                                            key={index}
-                                            style={{ lineHeight: 1.6 }}
-                                        >
-                                            <strong>
-                                                {turn.speaker}:
-                                            </strong>{' '}
-                                            {turn.text}
-                                        </p>
-                                    )
-                                )}
-                            </div>
-                        )}
-                    </>
-                )}
-            </section>
-
-            <section
-                style={{
-                    marginTop: '28px',
-                    padding: '24px',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '12px',
-                }}
-            >
-                <h2>
-                    {customPractice
-                        ? customPractice.exercise
-                            .mainIdeaQuestion
-                        : 'What are they talking about?'}
-                </h2>
-
-                {customPractice ? (
-                    <>
-                        <p
-                            style={{
-                                color: '#6b7280',
-                                lineHeight: 1.6,
-                            }}
-                        >
-                            {
-                                customPractice.exercise
-                                    .summaryPrompt
-                            }
-                        </p>
-
-                        <h3>Listen for these details</h3>
-
-                        <ul style={{ lineHeight: 1.7 }}>
-                            {customPractice.exercise.detailQuestions.map(
-                                (question) => (
-                                    <li key={question}>
-                                        {question}
-                                    </li>
+                        <h3>Useful phrases</h3>
+                        <ul>
+                            {snapshot.exercise.usefulPhrases.map(
+                                (phrase, index) => (
+                                    <li key={index}>{phrase}</li>
                                 )
                             )}
                         </ul>
-                    </>
-                ) : (
-                    <p
+
+                        <h3>Vocabulary</h3>
+                        <dl>
+                            {snapshot.exercise.vocabulary.map(
+                                (item, index) => (
+                                    <div key={index}>
+                                        <dt><strong>{item.term}</strong></dt>
+                                        <dd>{item.meaning}</dd>
+                                    </div>
+                                )
+                            )}
+                        </dl>
+                    </details>
+
+                    <h3>{snapshot.exercise.mainIdeaQuestion}</h3>
+                    <p>{snapshot.exercise.summaryPrompt}</p>
+
+                    <ul>
+                        {snapshot.exercise.detailQuestions.map(
+                            (question, index) => (
+                                <li key={index}>{question}</li>
+                            )
+                        )}
+                    </ul>
+
+                    <label htmlFor="listening-answer">
+                        Your English summary
+                    </label>
+                    <textarea
+                        id="listening-answer"
+                        value={answer}
+                        maxLength={5_000}
+                        disabled={isSubmitting || analysis !== null}
+                        onChange={(event) => {
+                            setAnswer(event.target.value);
+                            setMessage('');
+                        }}
                         style={{
-                            color: '#6b7280',
+                            display: 'block',
+                            width: '100%',
+                            boxSizing: 'border-box',
+                            minHeight: '160px',
+                            padding: '12px',
+                            marginTop: '8px',
                             lineHeight: 1.6,
                         }}
-                    >
-                        Use simple English. Think about:
-                        Who? What happened? Why? What&apos;s
-                        next?
-                    </p>
-                )}
+                    />
 
-                <textarea
-                    value={answer}
-                    onChange={handleAnswerChange}
-                    disabled={isSubmitting}
-                    placeholder={
-                        customPractice
-                            ? 'The speaker’s main point is...'
-                            : 'They are talking about...'
-                    }
-                    style={{
-                        width: '100%',
-                        minHeight: '160px',
-                        marginTop: '12px',
-                        padding: '14px',
-                        boxSizing: 'border-box',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '8px',
-                        fontSize: '16px',
-                        lineHeight: 1.6,
-                        resize: 'vertical',
-                    }}
-                />
-
-                <button
-                    type="button"
-                    onClick={handleSubmit}
-                    disabled={isSubmitting || !answer.trim()}
-                    style={{
-                        marginTop: '16px',
-                        padding: '12px 20px',
-                        border: 'none',
-                        borderRadius: '8px',
-                        backgroundColor:
-                            isSubmitting || !answer.trim() ? '#9ca3af' : '#2563eb',
-                        color: 'white',
-                        cursor:
-                            isSubmitting || !answer.trim()
-                                ? 'not-allowed'
-                                : 'pointer',
-                    }}
-                >
-                    {isSubmitting ? 'Analyzing...' : 'Get AI Feedback'}
-                </button>
-
-                {submitMessage && (
-                    <p style={{ marginTop: '16px' }}>{submitMessage}</p>
-                )}
-
-                {analysis && (
-                    <section
-                        style={{
-                            marginTop: '28px',
-                            padding: '24px',
-                            border: '1px solid #bfdbfe',
-                            borderRadius: '12px',
-                            backgroundColor: '#eff6ff',
-                        }}
-                    >
-                        <h2 style={{ marginTop: 0 }}>Your Listening Feedback</h2>
-
-                        <div
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '16px',
-                                flexWrap: 'wrap',
-                            }}
+                    {!analysis && (
+                        <button
+                            type="button"
+                            onClick={handleSubmit}
+                            disabled={isSubmitting || !answer.trim()}
+                            style={{ marginTop: '12px' }}
                         >
-                            <div
-                                style={{
-                                    width: '84px',
-                                    height: '84px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    borderRadius: '50%',
-                                    backgroundColor: '#2563eb',
-                                    color: 'white',
-                                    fontSize: '24px',
-                                    fontWeight: 'bold',
-                                }}
-                            >
-                                {analysis.understandingScore}%
-                            </div>
+                            {isSubmitting ? '正在提交并分析…' : 'Get AI Feedback'}
+                        </button>
+                    )}
 
-                            <div>
-                                <h3 style={{ margin: 0 }}>Main idea</h3>
+                    <p role="status">{message}</p>
 
-                                <p style={{ margin: '6px 0 0' }}>
-                                    {analysis.mainIdea.captured
-                                        ? '✅ You captured the main idea.'
-                                        : '🔄 The main idea needs another listen.'}
+                    {analysis && (
+                        <section>
+                            <h3>Listening feedback</h3>
+
+                            {isMock ? (
+                                <p>
+                                    当前为模拟模式：本单元已完成流程验证，
+                                    尚未进行真实听力评估。
                                 </p>
-                            </div>
-                        </div>
+                            ) : (
+                                <>
+                                    <p>
+                                        Understanding score:{' '}
+                                        {analysis.understandingScore} / 100
+                                    </p>
+                                    <p>{analysis.mainIdea.feedback}</p>
 
-                        <p style={{ marginTop: '20px', lineHeight: 1.6 }}>
-                            {analysis.mainIdea.feedback}
-                        </p>
+                                    <h4>Important information you missed</h4>
+                                    {analysis.missedKeyInformation.length ? (
+                                        <ul>
+                                            {analysis.missedKeyInformation.map(
+                                                (item, index) => (
+                                                    <li key={index}>{item}</li>
+                                                )
+                                            )}
+                                        </ul>
+                                    ) : (
+                                        <p>未发现重要遗漏。</p>
+                                    )}
 
-                        <h3>Key information</h3>
+                                    <h4>Suggested summary</h4>
+                                    <p>{analysis.suggestedSummary}</p>
 
-                        <div
-                            style={{
-                                display: 'grid',
-                                gridTemplateColumns:
-                                    'repeat(auto-fit, minmax(140px, 1fr))',
-                                gap: '10px',
-                            }}
-                        >
-                            {[
-                                {
-                                    label: 'Who?',
-                                    captured: analysis.keyInformation.who,
-                                },
-                                {
-                                    label: 'What happened?',
-                                    captured: analysis.keyInformation.whatHappened,
-                                },
-                                {
-                                    label: 'Why?',
-                                    captured: analysis.keyInformation.why,
-                                },
-                                {
-                                    label: "What's next?",
-                                    captured: analysis.keyInformation.whatsNext,
-                                },
-                            ].map((item) => (
-                                <div
-                                    key={item.label}
-                                    style={{
-                                        padding: '12px',
-                                        borderRadius: '8px',
-                                        backgroundColor: item.captured
-                                            ? '#dcfce7'
-                                            : '#fef3c7',
-                                    }}
-                                >
-                                    <strong>
-                                        {item.captured ? '✓' : '○'} {item.label}
-                                    </strong>
-                                </div>
-                            ))}
-                        </div>
+                                    <h4>Next improvements</h4>
+                                    <ol>
+                                        {analysis.improvements.map(
+                                            (item, index) => (
+                                                <li key={index}>{item}</li>
+                                            )
+                                        )}
+                                    </ol>
+                                </>
+                            )}
+                        </section>
+                    )}
+                </section>
+            )}
 
-                        <h3>Important information you missed</h3>
-
-                        {analysis.missedKeyInformation.length === 0 ? (
-                            <p>没有遗漏重要信息，很好！</p>
-                        ) : (
-                            <ul style={{ lineHeight: 1.7 }}>
-                                {analysis.missedKeyInformation.map((item, index) => (
-                                    <li key={index}>{item}</li>
-                                ))}
-                            </ul>
-                        )}
-
-                        <h3>A simple, natural summary</h3>
-
-                        <p
-                            style={{
-                                padding: '16px',
-                                borderLeft: '4px solid #2563eb',
-                                backgroundColor: 'white',
-                                lineHeight: 1.7,
-                            }}
-                        >
-                            {analysis.suggestedSummary}
-                        </p>
-
-                        <h3>Focus on these next time</h3>
-
-                        <ol style={{ lineHeight: 1.7 }}>
-                            {analysis.improvements.map((item, index) => (
-                                <li key={index}>{item}</li>
-                            ))}
-                        </ol>
-                    </section>
-                )}
-            </section>
-
-            <Link href="/listening/history">
-                View listening history →
-            </Link>
-
+            <p style={{ marginTop: '24px' }}>
+                <Link href="/listening/history">
+                    View listening history →
+                </Link>
+            </p>
         </main>
     );
 }

@@ -2,6 +2,8 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 
+import Link from 'next/link';
+
 import {
   ListeningPracticeSnapshotSchema,
   type ListeningPracticeSnapshot,
@@ -112,6 +114,7 @@ export default function MaterialLibrary({
     setStartingUnitId(unit.id);
     setError('');
 
+    //MaterialLibrary currently owns Listening practice generation while Reading navigation is delegated to the Reading route. Consider moving Listening start orchestration out of the library if the flow grows.
     try {
       const response = await fetch('/api/listening-practices/generate', {
         method: 'POST',
@@ -162,9 +165,9 @@ export default function MaterialLibrary({
     >
       <h2 style={{ marginTop: 0 }}>Material Library</h2>
       <p style={{ color: '#4b5563', lineHeight: 1.6 }}>
-        Save a podcast transcript as resumable units, or save pasted article text
-        as the foundation for a future Reading Coach. Video materials use the
-        same resumable Listening Coach flow.
+        Save video or podcast transcripts for Listening Coach, or pasted
+        article text for Reading Coach. Materials share unit progress
+        and resume.
       </p>
 
       <form onSubmit={handleCreate} style={{ display: 'grid', gap: '14px' }}>
@@ -284,9 +287,13 @@ export default function MaterialLibrary({
             )}
 
             {material.type === 'article' && (
-              <span style={{ color: '#6b7280' }}>
-                Text units saved; Reading Coach is not included in this V1.
-              </span>
+              <Link href={`/reading/${material.id}`}>
+                {material.totalUnits === 0
+                  ? 'View article'
+                  : material.nextUnit
+                    ? `Read Unit ${material.nextUnit.order}`
+                    : 'View reading progress'}
+              </Link>
             )}
           </article>
         ))}
