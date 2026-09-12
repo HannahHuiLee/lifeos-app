@@ -92,6 +92,31 @@ export function splitIntoLearningUnits(
   const minimumSize = isListeningMaterial ? 200 : 120;
   const targetSize = isListeningMaterial ? 1_200 : 1_000;
   const segments: string[] = [];
+  if (type === 'article') {
+    const paragraphs = normalized.split(/\n[\t ]*\n(?:[\t ]*\n)*/)
+      .map((paragraph) => paragraph.trim()).filter(Boolean);
+    let grouped = '';
+
+    for (const paragraph of paragraphs) {
+      if (grouped && grouped.length + 2 + paragraph.length > targetSize + minimumSize) {
+        segments.push(grouped);
+        grouped = '';
+      }
+
+      // Only oversized individual paragraphs use the existing boundary splitter.
+      let remaining = paragraph;
+      while (remaining.length > targetSize + minimumSize) {
+        const boundary = findBoundary(remaining, targetSize, minimumSize);
+        segments.push(remaining.slice(0, boundary).trim());
+        remaining = remaining.slice(boundary).trim();
+      }
+      grouped = grouped ? `${grouped}\n\n${remaining}` : remaining;
+    }
+
+    if (grouped) segments.push(grouped);
+    return segments;
+  }
+
   let remaining = normalized;
 
   while (remaining.length > targetSize + minimumSize) {

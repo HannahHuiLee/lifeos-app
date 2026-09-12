@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { prisma } from '@/lib/prisma';
+import { ReadingAnalysisSchema } from '@/lib/reading-analysis';
 import {
     LearningUnitStatusSchema,
     LearningUnitTypeSchema,
@@ -55,6 +56,50 @@ export default async function ReadingPage({
     });
 
     const unit = progress.nextUnit;
+    const completedSessions = !unit && progress.coveredUnits > 0
+        ? await prisma.readingSession.findMany({
+            where: {
+                learningUnitId: {
+                    in: progress.units
+                        .filter((item) => item.status === 'covered')
+                        .map((item) => item.id),
+                },
+                analysis: { not: null },
+            },
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            select: {
+                learningUnitId: true,
+                contentSnapshot: true,
+                answer: true,
+                analysis: true,
+            },
+        })
+        : [];
+
+    // 查询按时间降序，首次遇到的会话就是该单元最新的已完成会话。
+    const latestSessions = new Map<string, typeof completedSessions[number]>();
+    for (const session of completedSessions) {
+        if (session.learningUnitId && !latestSessions.has(session.learningUnitId)) {
+            latestSessions.set(session.learningUnitId, session);
+        }
+    }
+
+    const review = progress.units
+        .filter((item) => item.status === 'covered')
+        .map((item) => {
+            const session = latestSessions.get(item.id);
+            let suggestedSummary: string | null = null;
+            if (session?.analysis) {
+                try {
+                    suggestedSummary = ReadingAnalysisSchema.parse(
+                        JSON.parse(session.analysis)
+                    ).suggestedSummary;
+                } catch {
+                    // 历史数据损坏时仍展示保存的原文和答案。
+                }
+            }
+            return { unit: item, session, suggestedSummary };
+        });
 
     return (
         <main
@@ -104,7 +149,35 @@ export default async function ReadingPage({
                     />
                 </section>
             ) : (
-                <p>这份材料的所有单元都已完成。</p>
+                <section aria-labelledby="reading-review-heading">
+                    <p>这份材料的所有单元都已完成。</p>
+                    <h3 id="reading-review-heading">Reading review</h3>
+                    {review.map(({ unit: completedUnit, session, suggestedSummary }) => (
+                        <section key={completedUnit.id} style={{ marginTop: '24px' }}>
+                            <h4>Unit {completedUnit.order}</h4>
+                            {session ? (
+                                <>
+                                    <details>
+                                        <summary>Show source</summary>
+                                        <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                                            {session.contentSnapshot}
+                                        </p>
+                                    </details>
+                                    <h5>My summary</h5>
+                                    <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                                        {session.answer}
+                                    </p>
+                                    <h5>Suggested summary</h5>
+                                    <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                                        {suggestedSummary ?? '保存的分析无效，参考总结暂不可用。'}
+                                    </p>
+                                </>
+                            ) : (
+                                <p>未找到此单元的已完成阅读记录。</p>
+                            )}
+                        </section>
+                    ))}
+                </section>
             )}
         </main>
     );

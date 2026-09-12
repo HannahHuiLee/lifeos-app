@@ -75,6 +75,45 @@ describe('splitIntoLearningUnits', () => {
     expect(units.every((unit) => unit.length >= 120)).toBe(true);
   });
 
+  it('groups complete article paragraphs in order and preserves single line breaks', () => {
+    const paragraphs = ['A', 'B', 'C', 'D'].map(
+      (label, index) => `${label.repeat(index === 2 ? 349 : 199)}\n${label.repeat(index === 2 ? 350 : 200)}`
+    );
+    const content = paragraphs.join('\r\n \r\n');
+    const expected = [
+      paragraphs.slice(0, 2).join('\n\n'),
+      paragraphs.slice(2).join('\n\n'),
+    ];
+
+    expect(splitIntoLearningUnits(content, 'article')).toEqual(expected);
+    expect(splitIntoLearningUnits(content, 'article')).toEqual(expected);
+  });
+
+  it('splits an oversized article paragraph safely between intact neighbors', () => {
+    const before = 'Before '.repeat(30).trim();
+    const long = 'A sentence with a safe boundary. '.repeat(100).trim();
+    const after = 'After '.repeat(30).trim();
+    const units = splitIntoLearningUnits(`${before}\n\n${long}\n\n${after}`, 'article');
+
+    expect(units.length).toBeGreaterThan(3);
+    expect(units[0]).toBe(before);
+    expect(units[units.length - 1]).toContain(after);
+    expect(units.every((unit) => unit.length >= 120 && unit.length <= 1_250)).toBe(true);
+    expect(units.join(' ').replace(/\s+/g, ' ')).toBe(`${before} ${long} ${after}`);
+    expect(splitIntoLearningUnits('x'.repeat(2_500), 'article'))
+      .toEqual(['x'.repeat(1_000), 'x'.repeat(1_000), 'x'.repeat(500)]);
+  });
+
+  it.each(['video', 'podcast'] as const)('preserves existing %s boundaries', (type) => {
+    const paragraphs = ['A', 'B', 'C', 'D'].map((letter) => letter.repeat(500));
+    expect(splitIntoLearningUnits(paragraphs.join('\n\n'), type)).toEqual([
+      paragraphs.slice(0, 2).join('\n\n'),
+      paragraphs.slice(2).join('\n\n'),
+    ]);
+    expect(splitIntoLearningUnits('x'.repeat(600), type))
+      .toEqual(['x'.repeat(300), 'x'.repeat(300)]);
+  });
+
   it('uses listening units for video and podcast materials', () => {
     expect(getLearningUnitType('video')).toBe('audio_segment');
     expect(getLearningUnitType('podcast')).toBe('audio_segment');

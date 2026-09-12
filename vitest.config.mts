@@ -7,6 +7,9 @@ const projectRoot = fileURLToPath(
 );
 
 export default defineConfig({
+  oxc: {
+    jsx: { runtime: 'automatic' },
+  },
   resolve: {
     alias: {
       '@': projectRoot,
