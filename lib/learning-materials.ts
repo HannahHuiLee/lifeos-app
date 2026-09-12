@@ -90,27 +90,35 @@ export function splitIntoLearningUnits(
   const normalized = content.trim().replace(/\r\n/g, '\n');
   const isListeningMaterial = isListeningMaterialType(type);
   const minimumSize = isListeningMaterial ? 200 : 120;
-  const targetSize = isListeningMaterial ? 1_200 : 1_000;
+  const targetSize = isListeningMaterial
+    ? 1_200
+    : Math.max(1_000, Math.ceil(normalized.length / 10));
   const segments: string[] = [];
   if (type === 'article') {
     const paragraphs = normalized.split(/\n[\t ]*\n(?:[\t ]*\n)*/)
       .map((paragraph) => paragraph.trim()).filter(Boolean);
+    // Two nonempty paragraphs provide structure; otherwise use sentence endings.
+    const hasParagraphs = paragraphs.length > 1;
+    const blocks = hasParagraphs
+      ? paragraphs
+      : normalized.split(/(?<=[.!?])\s+|(?<=[.!?]["”’')])\s+/).filter(Boolean);
+    const separator = hasParagraphs ? '\n\n' : ' ';
     let grouped = '';
 
-    for (const paragraph of paragraphs) {
-      if (grouped && grouped.length + 2 + paragraph.length > targetSize + minimumSize) {
+    for (const block of blocks) {
+      if (grouped && grouped.length + separator.length + block.length > targetSize + minimumSize) {
         segments.push(grouped);
         grouped = '';
       }
 
-      // Only oversized individual paragraphs use the existing boundary splitter.
-      let remaining = paragraph;
+      // Only oversized individual blocks use the existing boundary splitter.
+      let remaining = block;
       while (remaining.length > targetSize + minimumSize) {
         const boundary = findBoundary(remaining, targetSize, minimumSize);
         segments.push(remaining.slice(0, boundary).trim());
         remaining = remaining.slice(boundary).trim();
       }
-      grouped = grouped ? `${grouped}\n\n${remaining}` : remaining;
+      grouped = grouped ? `${grouped}${separator}${remaining}` : remaining;
     }
 
     if (grouped) segments.push(grouped);

@@ -115,7 +115,7 @@ export default async function ReadingPage({
             <h2>{material.title}</h2>
 
             <p>
-                {progress.coveredUnits} / {progress.totalUnits} units covered
+                {progress.coveredUnits} / {progress.totalUnits} units {unit ? 'completed' : 'covered'}
             </p>
 
             {progress.totalUnits === 0 ? (
@@ -123,11 +123,14 @@ export default async function ReadingPage({
             ) : unit ? (
                 <section aria-labelledby="reading-unit-heading">
                     <h3 id="reading-unit-heading">
-                        Unit {unit.order}
+                        Unit {unit.order} of {progress.totalUnits}
                     </h3>
 
                     <p style={{ color: '#4b5563' }}>
                         Read this section and identify its main idea.
+                    </p>
+                    <p style={{ color: '#4b5563' }}>
+                        You can stop anytime — completed units are saved.
                     </p>
 
                     <div

@@ -80,6 +80,8 @@ describe('completed reading review', () => {
         expect(html).not.toContain('Old answer');
         expect(html).not.toContain('Current content');
         expect(html).not.toContain('Active practice');
+        expect(html).toContain('2 / 2 units covered');
+        expect(html).not.toContain('You can stop anytime');
     });
 
     it.each(['{broken', JSON.stringify({ suggestedSummary: 'Unvalidated summary' })])(
@@ -108,6 +110,9 @@ describe('completed reading review', () => {
         const html = await render();
         expect(mocks.sessions).not.toHaveBeenCalled();
         expect(html).toContain('Active practice');
+        expect(html).toContain('Unit 2 of 2');
+        expect(html).toContain('1 / 2 units completed');
+        expect(html).toContain('You can stop anytime — completed units are saved.');
         expect(html).toContain('Current content');
         expect(html).not.toContain('Reading review');
     });

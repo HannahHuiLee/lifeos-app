@@ -104,6 +104,40 @@ describe('splitIntoLearningUnits', () => {
       .toEqual(['x'.repeat(1_000), 'x'.repeat(1_000), 'x'.repeat(500)]);
   });
 
+  it('groups complete sentences in order when blank-line paragraphs are absent', () => {
+    const sentences = ['A', 'B', 'C', 'D'].map((letter) => `${letter.repeat(599)}.`);
+    const content = sentences.join('\n');
+    const units = splitIntoLearningUnits(content, 'article');
+    expect(units).toEqual(sentences);
+    expect(splitIntoLearningUnits(content, 'article')).toEqual(units);
+    expect(splitIntoLearningUnits('\n\n' + content + '\n\n', 'article')).toEqual(units);
+    const shortSentences = ['A', 'B', 'C', 'D'].map((letter) => `${letter.repeat(399)}?`);
+    expect(splitIntoLearningUnits(shortSentences.join(' '), 'article')).toEqual([
+      shortSentences.slice(0, 2).join(' '), shortSentences.slice(2).join(' '),
+    ]);
+  });
+
+  it.each(['\n\n', ' '])('uses a larger target for long articles with separator %j', (separator) => {
+    const blocks = Array.from({ length: 40 }, (_, index) => `${index}: ${'x'.repeat(495)}.`);
+    const units = splitIntoLearningUnits(blocks.join(separator), 'article');
+    expect(units).toHaveLength(10);
+    expect(units).toEqual(Array.from({ length: 10 }, (_, index) =>
+      blocks.slice(index * 4, index * 4 + 4).join(separator)));
+  });
+
+  it('allows eleven intact paragraphs rather than forcing ten units', () => {
+    const paragraphs = Array.from({ length: 11 }, (_, index) => `${index}: ${'x'.repeat(1_196)}`);
+    expect(splitIntoLearningUnits(paragraphs.join('\n\n'), 'article')).toEqual(paragraphs);
+  });
+
+  it('falls back safely for an oversized sentence without losing text', () => {
+    const sentence = 'word '.repeat(600).trim() + '.';
+    const units = splitIntoLearningUnits(sentence, 'article');
+    expect(units.length).toBeGreaterThan(1);
+    expect(units.every((unit) => unit.length >= 120 && unit.length <= 1_250)).toBe(true);
+    expect(units.join(' ')).toBe(sentence);
+  });
+
   it.each(['video', 'podcast'] as const)('preserves existing %s boundaries', (type) => {
     const paragraphs = ['A', 'B', 'C', 'D'].map((letter) => letter.repeat(500));
     expect(splitIntoLearningUnits(paragraphs.join('\n\n'), type)).toEqual([
