@@ -122,7 +122,7 @@ export default function ListeningPage() {
         >
             <h1>English Learning</h1>
             <p style={{ color: '#6b7280', lineHeight: 1.6 }}>
-                Choose a material and continue your next learning unit.
+                Practice Reading and Listening through resumable learning units with AI feedback and review.
             </p>
 
             {/* 保持组件挂载，让它接收进度刷新；练习时隐藏材料入口。 */}

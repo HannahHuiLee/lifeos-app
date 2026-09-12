@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 
 import type {
   EvidenceBackedReflectionAnalysis,
@@ -198,8 +199,10 @@ export default function ReflectionPage() {
       <h1>今日 Reflection</h1>
 
       <p style={{ color: '#666', marginTop: '8px' }}>
-        写下今天发生了什么、你的感受，以及你从中学到了什么。
+        Capture a reflection, analyze it with structured AI feedback, and review patterns over time.
       </p>
+
+      <Link href="/history">Reflection History →</Link>
 
       <textarea
         value={content}

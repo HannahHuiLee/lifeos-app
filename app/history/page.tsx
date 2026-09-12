@@ -194,7 +194,7 @@ export default function HistoryPage() {
             <h1>Reflection History</h1>
 
             <p style={{ color: '#6b7280', marginTop: '8px' }}>
-                回顾以前记录的 Reflection 和 AI 分析。
+                Review past reflections and analyze recurring themes across recent entries.
             </p>
 
             <section

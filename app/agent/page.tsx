@@ -109,8 +109,7 @@ export default function AgentPage() {
                     lineHeight: '1.6',
                 }}
             >
-                询问你最近的 Reflection。Agent
-                会在需要时读取真实记录，然后基于证据回答。
+                Explore auditable agent workflows where the model selects tools, executes real actions, and returns traceable results.
             </p>
 
             <form
