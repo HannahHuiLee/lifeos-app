@@ -16,7 +16,6 @@ export default function Navbar() {
             alignItems: 'center',
         }}>
             <Link href="/" style={{ color: '#fbbf24', textDecoration: 'none' }}>🏠 LifeOS 首页</Link>
-            <Link href="/create-note" style={{ color: '#34d399', textDecoration: 'none' }}>📝 新建记录</Link>
             <Link href="/reflection" style={{ color: '#60a5fa', textDecoration: 'none' }}>✍️ Reflection</Link>
             <Link href="/agent" style={{ color: '#93c5fd', textDecoration: 'none', }}>🤖 Agent</Link>
             <Link href="/history" style={{ color: '#c4b5fd', textDecoration: 'none' }}>📚 History</Link>
