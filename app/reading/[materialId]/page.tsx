@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { prisma } from '@/lib/prisma';
-import { ReadingAnalysisSchema } from '@/lib/reading-analysis';
+import { ReadingAnalysisSchema, type ReadingAnalysis } from '@/lib/reading-analysis';
 import {
     LearningUnitStatusSchema,
     LearningUnitTypeSchema,
@@ -10,6 +10,7 @@ import {
 } from '@/lib/learning-materials';
 
 import ReadingPractice from '../ReadingPractice';
+import ReadingFeedback from '../ReadingFeedback';
 
 // 每次服务端渲染都读取数据库中的当前进度。
 export const dynamic = 'force-dynamic';
@@ -88,17 +89,17 @@ export default async function ReadingPage({
         .filter((item) => item.status === 'covered')
         .map((item) => {
             const session = latestSessions.get(item.id);
-            let suggestedSummary: string | null = null;
+            let analysis: ReadingAnalysis | null = null;
             if (session?.analysis) {
                 try {
-                    suggestedSummary = ReadingAnalysisSchema.parse(
+                    analysis = ReadingAnalysisSchema.parse(
                         JSON.parse(session.analysis)
-                    ).suggestedSummary;
+                    );
                 } catch {
                     // 历史数据损坏时仍展示保存的原文和答案。
                 }
             }
-            return { unit: item, session, suggestedSummary };
+            return { unit: item, session, analysis };
         });
 
     return (
@@ -129,9 +130,6 @@ export default async function ReadingPage({
                     <p style={{ color: '#4b5563' }}>
                         Read this section and identify its main idea.
                     </p>
-                    <p style={{ color: '#4b5563' }}>
-                        You can stop anytime — completed units are saved.
-                    </p>
 
                     <div
                         style={{
@@ -155,7 +153,7 @@ export default async function ReadingPage({
                 <section aria-labelledby="reading-review-heading">
                     <p>这份材料的所有单元都已完成。</p>
                     <h3 id="reading-review-heading">Reading review</h3>
-                    {review.map(({ unit: completedUnit, session, suggestedSummary }) => (
+                    {review.map(({ unit: completedUnit, session, analysis }) => (
                         <section key={completedUnit.id} style={{ marginTop: '24px' }}>
                             <h4>Unit {completedUnit.order}</h4>
                             {session ? (
@@ -166,14 +164,18 @@ export default async function ReadingPage({
                                             {session.contentSnapshot}
                                         </p>
                                     </details>
-                                    <h5>My summary</h5>
+                                    <h5>Your Answer</h5>
                                     <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
                                         {session.answer}
                                     </p>
-                                    <h5>Suggested summary</h5>
-                                    <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-                                        {suggestedSummary ?? '保存的分析无效，参考总结暂不可用。'}
-                                    </p>
+                                    {analysis ? (
+                                        <ReadingFeedback analysis={analysis} compact />
+                                    ) : (
+                                        <div>
+                                            <h5>AI Reference</h5>
+                                            <p>保存的分析无效，参考总结暂不可用。</p>
+                                        </div>
+                                    )}
                                 </>
                             ) : (
                                 <p>未找到此单元的已完成阅读记录。</p>

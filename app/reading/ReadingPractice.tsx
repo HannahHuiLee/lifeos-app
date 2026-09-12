@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import ReadingFeedback from './ReadingFeedback';
 
 import {
     ReadingAnalysisSchema,
@@ -147,13 +148,18 @@ export default function ReadingPractice({
             aria-labelledby="reading-answer-heading"
             style={{ marginTop: '24px' }}
         >
-            <h3 id="reading-answer-heading">Your summary</h3>
+            <aside>
+                <h3>Section Summary Guide</h3>
+                <ul>
+                    <li>Main point — What is this section mainly saying?</li>
+                    <li>Role — What is this section doing in the article: explaining, giving evidence, showing an example, contrasting, or qualifying?</li>
+                    <li>Takeaway — What is one idea, detail, or expression worth keeping?</li>
+                </ul>
+                <p>Aim for 2–4 sentences. You don’t need to include every detail.</p>
+            </aside>
+            <h3 id="reading-answer-heading">Your Answer</h3>
 
             <form onSubmit={handleSubmit}>
-                <label htmlFor="reading-answer">
-                    用英文概括这一单元的主旨和重要细节。
-                </label>
-
                 <textarea
                     id="reading-answer"
                     required
@@ -182,8 +188,8 @@ export default function ReadingPractice({
                             : state.phase === 'analyzing'
                                 ? '正在分析…'
                                 : state.phase === 'analysisError'
-                                    ? '重试分析'
-                                    : '提交并分析'}
+                                    ? 'Retry'
+                                    : 'Submit'}
                     </button>
                 )}
             </form>
@@ -209,51 +215,8 @@ export default function ReadingPractice({
                                 尚未进行真实阅读评估。
                             </p>
                         ) : (
-                            <>
-                                <h4>
-                                    {state.analysis.mainIdea.captured
-                                        ? '已抓住主旨'
-                                        : '主旨仍需完善'}
-                                </h4>
-                                <p>{state.analysis.mainIdea.feedback}</p>
-
-                                <h4>重要遗漏</h4>
-                                {state.analysis.missedKeyPoints.length ? (
-                                    <ul>
-                                        {state.analysis.missedKeyPoints.map(
-                                            (point, index) => (
-                                                <li key={index}>{point}</li>
-                                            )
-                                        )}
-                                    </ul>
-                                ) : (
-                                    <p>未发现重要遗漏。</p>
-                                )}
-
-                                <h4>理解纠正</h4>
-                                {state.analysis.corrections.length ? (
-                                    <ul>
-                                        {state.analysis.corrections.map(
-                                            (item, index) => (
-                                                <li key={index}>
-                                                    <blockquote>
-                                                        {item.learnerClaim}
-                                                    </blockquote>
-                                                    <p>{item.correction}</p>
-                                                </li>
-                                            )
-                                        )}
-                                    </ul>
-                                ) : (
-                                    <p>未发现需要纠正的理解错误。</p>
-                                )}
-
-                                <h4>参考总结</h4>
-                                <p>{state.analysis.suggestedSummary}</p>
-                            </>
+                            <ReadingFeedback analysis={state.analysis} />
                         )}
-
-                        <p>本单元已完成。点击继续，更新进度并查看下一单元。</p>
 
                         <button
                             type="button"
@@ -262,7 +225,7 @@ export default function ReadingPractice({
                                 startRefresh(() => router.refresh());
                             }}
                         >
-                            {isRefreshing ? '正在加载…' : '继续'}
+                            {isRefreshing ? 'Loading…' : 'Continue'}
                         </button>
                     </section>
                 )}

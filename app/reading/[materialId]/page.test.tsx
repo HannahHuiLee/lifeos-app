@@ -63,7 +63,8 @@ describe('completed reading review', () => {
         expect(html).toContain('Newest answer 1');
         expect(html).toContain('Newest answer 2');
         expect(html).toContain('Validated summary');
-        const sources = html.match(/<details>.*?<\/details>/g) ?? [];
+        const sources = (html.match(/<details>.*?<\/details>/g) ?? [])
+            .filter((section) => section.includes('<summary>Show source</summary>'));
         expect(sources).toHaveLength(2);
         sources.forEach((source, index) => {
             expect(source).toContain('<summary>Show source</summary>');
@@ -71,17 +72,73 @@ describe('completed reading review', () => {
         });
         // Exact <details> opening tags have neither open nor a shared name.
         const visibleReview = html.replace(/<details>.*?<\/details>/g, '');
-        expect(visibleReview).toContain('<h5>My summary</h5>');
-        expect(visibleReview).toContain('<h5>Suggested summary</h5>');
+        expect(visibleReview).toContain('<h5>Your Answer</h5>');
+        expect(visibleReview).toContain('<h5>AI Reference</h5>');
         expect(visibleReview).toContain('Newest answer 1');
         expect(visibleReview).toContain('Newest answer 2');
         expect(visibleReview).toContain('Validated summary');
         expect(visibleReview).not.toContain('Snapshot');
+        expect(html).not.toContain('Grammar notes');
+        expect(html).not.toContain('Reusable English patterns');
+        expect(html).not.toContain('Your answer, upgraded');
+        expect(html).not.toContain('Section Summary Guide');
+        expect(html).not.toContain('Correct Answer');
         expect(html).not.toContain('Old answer');
         expect(html).not.toContain('Current content');
         expect(html).not.toContain('Active practice');
         expect(html).toContain('2 / 2 units covered');
         expect(html).not.toContain('You can stop anytime');
+    });
+
+    it('renders historical language upgrades without collapsing the comparison', async () => {
+        mocks.sessions.mockResolvedValue([session(1, 'Practice make better', JSON.stringify({
+            ...JSON.parse(analysis),
+            comparison: {
+                doneWell: ['You understood gradual improvement.'],
+                usefulUpgrade: { learnerWording: 'Practice make better', suggestion: 'Practice helps us improve.' },
+            },
+        }))]);
+        const html = await render();
+        expect(html).not.toContain('Comparison feedback');
+        expect(html).not.toContain('What you did well');
+        expect(html).toContain('What you missed');
+        expect(html).toContain('Useful English upgrades');
+        expect(html).not.toContain('You understood gradual improvement.');
+        expect(html).toContain('Practice helps us improve.');
+    });
+
+    it('keeps quick-review feedback visible and secondary content independently collapsed', async () => {
+        mocks.sessions.mockResolvedValue([session(1, 'Stored learner answer', JSON.stringify({
+            ...JSON.parse(analysis),
+            missedKeyPoints: ['First gap', 'Second gap', 'Third gap'],
+            comparison: { usefulUpgrade: {
+                items: [1, 2, 3].map((number) => ({ original: `Original ${number}`, improved: `Improved ${number}`, reason: `Reason ${number}` })),
+                upgradedAnswer: 'Stored upgraded answer',
+            } },
+            grammarNotes: [{ original: 'Grammar original', corrected: 'Grammar corrected', explanation: 'Short rule', example: 'Stored example' }],
+            reusablePatterns: ['This section explains...', 'One takeaway is...', 'The author suggests...'],
+        }))]);
+        const html = await render();
+        const visible = html.replace(/<details>.*?<\/details>/g, '');
+        for (const text of ['Your Answer', 'Stored learner answer', 'AI Reference', 'Validated summary',
+            'What you missed', 'First gap', 'Second gap', 'Useful English upgrades',
+            'Original 1', 'Improved 1', 'Original 2', 'Improved 2', 'Reusable English patterns']) {
+            expect(visible).toContain(text);
+        }
+        for (const text of ['Third gap', 'Original 3', 'Improved 3', 'Section Summary Guide',
+            'Aim for 2–4 sentences', 'Active practice', '<button', 'Comparison feedback']) {
+            expect(html).not.toContain(text);
+        }
+        for (const pattern of ['This section explains...', 'One takeaway is...', 'The author suggests...']) {
+            expect(visible).toContain(`<strong>${pattern}</strong>`);
+        }
+        for (const [label, text] of [['Show source', 'Snapshot 1'], ['Grammar notes', 'Grammar corrected'], ['Your answer, upgraded', 'Stored upgraded answer']]) {
+            const section = (html.match(/<details>.*?<\/details>/g) ?? []).find((item) => item.includes(`<summary>${label}</summary>`));
+            expect(section).toContain(text);
+            expect(visible).not.toContain(text);
+        }
+        expect(html).toContain('Stored example');
+        expect(html).not.toContain('Current content');
     });
 
     it.each(['{broken', JSON.stringify({ suggestedSummary: 'Unvalidated summary' })])(
@@ -112,7 +169,6 @@ describe('completed reading review', () => {
         expect(html).toContain('Active practice');
         expect(html).toContain('Unit 2 of 2');
         expect(html).toContain('1 / 2 units completed');
-        expect(html).toContain('You can stop anytime — completed units are saved.');
         expect(html).toContain('Current content');
         expect(html).not.toContain('Reading review');
     });
