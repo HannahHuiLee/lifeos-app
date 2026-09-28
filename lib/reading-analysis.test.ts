@@ -41,15 +41,19 @@ describe('ReadingAnalysisSchema', () => {
         const item = { original: 'Practice make better', improved: 'Practice helps us improve', reason: null };
         for (const count of [0, 1, 3, 4]) {
             expect(ReadingGenerationSchema.safeParse({
-                ...makeAnalysis(), reusablePatterns: [], grammarNotes: [], comparison: { usefulUpgrade: {
-                    items: Array.from({ length: count }, () => item), upgradedAnswer: null,
-                } },
+                ...makeAnalysis(), reusablePatterns: [], grammarNotes: [], comparison: {
+                    usefulUpgrade: {
+                        items: Array.from({ length: count }, () => item), upgradedAnswer: null,
+                    }
+                },
             }).success).toBe(count >= 1 && count <= 3);
         }
         expect(ReadingAnalysisSchema.safeParse({
-            ...makeAnalysis(), reusablePatterns: [], grammarNotes: [], comparison: { usefulUpgrade: {
-                learnerWording: 'Practice make better', suggestion: 'Practice helps us improve',
-            } },
+            ...makeAnalysis(), reusablePatterns: [], grammarNotes: [], comparison: {
+                usefulUpgrade: {
+                    learnerWording: 'Practice make better', suggestion: 'Practice helps us improve',
+                }
+            },
         }).success).toBe(true);
     });
 
@@ -62,10 +66,14 @@ describe('ReadingAnalysisSchema', () => {
                 ...current, grammarNotes: [], reusablePatterns: Array.from({ length: count }, () => 'This section explains how...'),
             }).success).toBe(count <= 3);
         }
-        const oldAnalysis = { ...current, comparison: { usefulUpgrade: {
-            items: Array.from({ length: 4 }, () => ({ original: 'a', improved: 'b', reason: null })),
-            upgradedAnswer: null,
-        } } };
+        const oldAnalysis = {
+            ...current, comparison: {
+                usefulUpgrade: {
+                    items: Array.from({ length: 4 }, () => ({ original: 'a', improved: 'b', reason: null })),
+                    upgradedAnswer: null,
+                }
+            }
+        };
         expect(ReadingAnalysisSchema.safeParse(oldAnalysis).success).toBe(true);
         expect(ReadingGenerationSchema.safeParse({ ...oldAnalysis, reusablePatterns: [] }).success).toBe(false);
     });
@@ -252,4 +260,84 @@ describe('ReadingAnalysisSchema', () => {
 
         expect(result.success).toBe(false);
     });
+
+    it.each([
+        {
+            missedCount: 0,
+            correctionCount: 0,
+            expectedSuccess: true,
+        },
+        {
+            missedCount: 1,
+            correctionCount: 0,
+            expectedSuccess: true,
+        },
+        {
+            missedCount: 2,
+            correctionCount: 0,
+            expectedSuccess: true,
+        },
+        {
+            missedCount: 1,
+            correctionCount: 1,
+            expectedSuccess: true,
+        },
+        {
+            missedCount: 0,
+            correctionCount: 2,
+            expectedSuccess: true,
+        },
+        {
+            missedCount: 2,
+            correctionCount: 1,
+            expectedSuccess: false,
+        },
+        {
+            missedCount: 1,
+            correctionCount: 2,
+            expectedSuccess: false,
+        },
+        {
+            missedCount: 2,
+            correctionCount: 2,
+            expectedSuccess: false,
+        },
+    ])(
+        'validates combined content feedback: $missedCount missed + $correctionCount corrections',
+        ({
+            missedCount,
+            correctionCount,
+            expectedSuccess,
+        }) => {
+            const result = ReadingGenerationSchema.safeParse({
+                ...makeAnalysis(),
+
+                missedKeyPoints: Array.from(
+                    { length: missedCount },
+                    (_, index) =>
+                        `Important point ${index + 1}.`
+                ),
+
+                corrections: Array.from(
+                    { length: correctionCount },
+                    (_, index) => ({
+                        learnerClaim:
+                            `Incorrect claim ${index + 1}.`,
+                        correction:
+                            `Correction ${index + 1}.`,
+                    })
+                ),
+
+                reusablePatterns: [],
+                grammarNotes: [],
+
+                comparison: {
+                    usefulUpgrade: null,
+                },
+            });
+
+            expect(result.success).toBe(expectedSuccess);
+        }
+    );
+
 });

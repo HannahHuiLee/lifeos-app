@@ -62,11 +62,29 @@ export type ReadingAnalysis = z.infer<
 export const ReadingGenerationSchema = ReadingAnalysisSchema.extend({
     reusablePatterns: ReusablePatternsSchema,
     grammarNotes: GrammarNotesSchema,
-    missedKeyPoints: ReadingAnalysisSchema.shape.missedKeyPoints.max(2),
-    corrections: ReadingAnalysisSchema.shape.corrections.max(2),
+
+    missedKeyPoints:
+        ReadingAnalysisSchema.shape.missedKeyPoints.max(2),
+
+    corrections:
+        ReadingAnalysisSchema.shape.corrections.max(2),
+
     comparison: z.strictObject({
         usefulUpgrade: DetailedUpgradeSchema.extend({
             items: DetailedUpgradeSchema.shape.items.max(3),
         }).nullable(),
     }),
+}).superRefine((analysis, ctx) => {
+    const totalContentFeedback =
+        analysis.missedKeyPoints.length +
+        analysis.corrections.length;
+
+    if (totalContentFeedback > 2) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message:
+                'Content feedback total must not exceed 2 items',
+            path: ['missedKeyPoints'],
+        });
+    }
 });

@@ -83,26 +83,34 @@ export async function analyzeReading(
 - Useful English upgrades: natural phrasing, collocations, prepositions, and summary language. Grammar notes: specific grammar rules. Assign each issue to only one category; do not duplicate it in content feedback.
 - Do not generate positive feedback. Content feedback must not discuss grammar or phrasing.
 - reusablePatterns 返回 1–3 条简短、自然、值得记忆的英文句型或语块，基于答案和当前单元选择，能迁移到其他总结、写作或口语场景；不是任意词汇或文章专属短语，无有价值的模式则返回 []，不要凑数。
-- missedKeyPoints 和 corrections 合计最多 2 条简短内容反馈，只针对真正遗漏或误解，不重复完整答案句子；不得与语言升级重复。
 - upgradedAnswer 保持简洁，可为 null；有帮助时用 B1–B2 英语润色学习者答案，尽量保留其想法、结构和限定条件，不替换为新解释。
 - upgradedAnswer 是学习者答案的语言润色，suggestedSummary 是独立的原文参考总结，两者不可混同。
-- 仅表达生硬时放入 usefulUpgrade，不放入 missedKeyPoints 或 corrections，除非含义确实错误。
 - 优先改进学习者自己的措辞；同一问题不要在 What you missed 和 Useful upgrade 重复，理解正确但语言生硬时内容反馈可为空。
-- missedKeyPoints 只涵盖真正遗漏的重要主旨、段落作用、限定条件或细节；重要内容已覆盖则返回 []。
 - suggestedSummary 是 AI Reference 示例，不是唯一正确答案；保留原文含义和限定条件，不超出来源推断。
 - mainIdea.captured 表示是否抓住当前单元主旨。
 - mainIdea.feedback 用中文解释判断原因。
-- missedKeyPoints 用中文列出最多 2 条重要遗漏，没有则返回 []。
-- corrections 最多 2 条，没有理解错误则返回 []。
-- learnerClaim 引用学习者答案中需要纠正的原话，不编造其说法。
-- correction 用中文说明原文实际表达的含义。
 - 不把原文未提供的事实作为纠正依据。
 - 不为了填满数组而制造遗漏或错误。
 - suggestedSummary 使用简单、自然的英语，只总结当前原文。
 - 遵守输出结构的长度限制，保持反馈简短。
 - 不添加原文未明确给出的推算数字，例如不要把四周换算为工作日数量。
 - 保留原文的证据性质：参与者自述、观察结果和已证实结论不可相互替换。
-- 同一个理解错误优先放入 corrections，避免在 missedKeyPoints 中重复列出。
+
+- missedKeyPoints 和 corrections 是同一组内容理解反馈。
+- 两个数组合计最多 2 条，即：
+  missedKeyPoints.length + corrections.length <= 2
+- 如果存在超过 2 个候选内容问题，只保留最重要的 2 个。
+- missedKeyPoints 仅用于真正遗漏的重要主旨、段落作用、限定条件或细节；用中文表达，没有则返回 []。
+- corrections 仅用于实际理解错误；没有理解错误则返回 []。
+- 同一个理解问题只能出现在 missedKeyPoints 或 corrections 其中之一，不得重复。
+- learnerClaim 必须逐字引用学习者答案中需要纠正的内容，不编造其说法。
+- correction 用中文说明原文实际表达的含义。
+- 不把原文未提供的事实作为纠正依据。
+- 不为了填满数组而制造遗漏或错误。
+
+【硬性内容反馈限制】
+missedKeyPoints.length + corrections.length <= 2
+返回结果前必须自行检查这一条件。
                 `.trim(),
             },
             {
@@ -127,9 +135,29 @@ export async function analyzeReading(
     }
 
     const analysis = ReadingGenerationSchema.parse(response.output_parsed);
-    if (analysis.missedKeyPoints.length + analysis.corrections.length > 2) {
-        throw new Error('内容反馈合计不能超过 2 条');
+    const totalContentFeedback =
+        analysis.missedKeyPoints.length +
+        analysis.corrections.length;
+
+    if (totalContentFeedback > 2) {
+        console.error(
+            '[reading-analyzer] content feedback limit exceeded',
+            {
+                missedKeyPoints:
+                    analysis.missedKeyPoints.length,
+                corrections:
+                    analysis.corrections.length,
+                total: totalContentFeedback,
+            }
+        );
+
+        throw new Error(
+            `内容反馈合计不能超过 2 条，当前为 ${totalContentFeedback} 条`
+        );
     }
+
+
+
     for (const item of analysis.comparison.usefulUpgrade?.items ?? []) {
         if (!input.answer.includes(item.original)) {
             throw new Error('语言升级引用不在学习者答案中');
